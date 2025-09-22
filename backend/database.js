@@ -61,12 +61,17 @@ class Database {
         };
         
         // Store reply info in metadata field if it exists, otherwise skip
-        if (replyToMessageId || conversationMode !== 'group') {
+        const hasValidReplyId = replyToMessageId && replyToMessageId !== 'null' && replyToMessageId !== 'undefined';
+        if (hasValidReplyId || conversationMode !== 'group') {
             try {
-                insertData.metadata = JSON.stringify({
-                    reply_to_message_id: replyToMessageId,
+                const metadata = {
                     conversation_mode: conversationMode
-                });
+                };
+                // Only add reply_to_message_id if it's a valid UUID
+                if (hasValidReplyId) {
+                    metadata.reply_to_message_id = replyToMessageId;
+                }
+                insertData.metadata = JSON.stringify(metadata);
             } catch (e) {
                 // If metadata field doesn't exist, continue without it
                 console.log('Metadata field not available, skipping reply info');
@@ -102,13 +107,18 @@ class Database {
         };
         
         // Store reply info in metadata field if it exists, otherwise skip
-        if (replyToMessageId || conversationMode !== 'group') {
+        const hasValidReplyId = replyToMessageId && replyToMessageId !== 'null' && replyToMessageId !== 'undefined';
+        if (hasValidReplyId || conversationMode !== 'group') {
             try {
-                insertData.metadata = JSON.stringify({
-                    reply_to_message_id: replyToMessageId,
+                const metadata = {
                     conversation_mode: conversationMode,
                     is_direct_reply: conversationMode === 'direct'
-                });
+                };
+                // Only add reply_to_message_id if it's a valid UUID
+                if (hasValidReplyId) {
+                    metadata.reply_to_message_id = replyToMessageId;
+                }
+                insertData.metadata = JSON.stringify(metadata);
             } catch (e) {
                 console.log('Metadata field not available, skipping reply info');
             }
@@ -222,104 +232,69 @@ class Database {
 
     // Get all conversations for user with last message preview
     async getConversations() {
-        const { data, error } = await supabase
-            .from('conversations')
-            .select(`
-                *,
-                last_message:messages(content, sender_type, ai_models(name))
-            `)
-            .eq('created_by', '00000000-0000-0000-0000-000000000001') // Default test user
-            .order('last_message_at', { ascending: false, nullsFirst: false })
-            .order('created_at', { ascending: false });
-        
-        if (error) {
-            console.error('Error fetching conversations:', error);
-            throw new Error('Failed to fetch conversations');
+        try {
+
+            const { data, error } = await supabase
+                .from('conversations')
+                .select('*')
+                .order('updated_at', { ascending: false });
+
+
+            if (error) {
+                console.error('❌ Error fetching conversations:', error);
+                throw new Error(`Failed to fetch conversations: ${error.message}`);
+            }
+
+            return data || [];
+        } catch (e) {
+            console.error('💥 Exception in getConversations:', e);
+            throw e;
         }
-        
-        // Process conversations to get the actual last message
-        const processedConversations = await Promise.all(
-            data.map(async (conversation) => {
-                // Get the most recent message for this conversation
-                const { data: lastMessage } = await supabase
-                    .from('messages')
-                    .select(`
-                        content,
-                        sender_type,
-                        ai_models(name)
-                    `)
-                    .eq('conversation_id', conversation.id)
-                    .order('created_at', { ascending: false })
-                    .limit(1);
-                
-                return {
-                    ...conversation,
-                    last_message: lastMessage && lastMessage[0] ? lastMessage[0] : null
-                };
-            })
-        );
-        
-        return processedConversations;
     }
 
     // Create new conversation
     async createConversation() {
         const conversationId = crypto.randomUUID();
-        
-        // Create conversation
-        const { data: conversation, error: convError } = await supabase
-            .from('conversations')
-            .insert({
-                id: conversationId,
-                title: 'New Chat',
-                created_by: '00000000-0000-0000-0000-000000000001', // Default test user
-                created_at: new Date().toISOString()
-            })
-            .select()
-            .single();
-        
-        if (convError) {
-            console.error('Error creating conversation:', convError);
-            throw new Error('Failed to create conversation');
+
+        try {
+            // Create conversation with minimal required fields
+            const { data: conversation, error: convError } = await supabase
+                .from('conversations')
+                .insert({
+                    id: conversationId,
+                    title: 'New Chat',
+                    created_by: '00000000-0000-0000-0000-000000000001',
+                    created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString()
+                })
+                .select()
+                .single();
+
+            if (convError) {
+                console.error('Error creating conversation:', convError);
+                throw new Error(`Failed to create conversation: ${convError.message}`);
+            }
+
+            // Add welcome system message
+            try {
+                await supabase
+                    .from('messages')
+                    .insert({
+                        conversation_id: conversationId,
+                        sender_type: 'system',
+                        content: 'Welcome to the AI Group Chat! Select a First Responder and ask a question to begin.',
+                        created_at: new Date().toISOString()
+                    });
+            } catch (msgError) {
+                console.error('Error creating welcome message:', msgError);
+                // Don't fail conversation creation if message creation fails
+            }
+
+            return conversation;
+        } catch (error) {
+            console.error('Error in createConversation:', error);
+            throw error;
         }
-        
-        // Add test user as participant
-        await supabase
-            .from('conversation_participants')
-            .insert({
-                conversation_id: conversationId,
-                user_id: '00000000-0000-0000-0000-000000000001',
-                role: 'admin'
-            });
-        
-        // Add all AI models to the conversation
-        const aiModelInserts = [
-            'google/gemini-2.5-flash',
-            'openai/gpt-4o-mini', 
-            'anthropic/claude-3.5-sonnet',
-            'meta-llama/llama-3-8b-instruct',
-            'deepseek/deepseek-chat',
-            'qwen/qwen-2.5-7b-instruct'
-        ].map(modelId => ({
-            conversation_id: conversationId,
-            ai_model_id: modelId
-        }));
-        
-        await supabase
-            .from('conversation_ai_models')
-            .insert(aiModelInserts);
-        
-        // Add welcome system message
-        await supabase
-            .from('messages')
-            .insert({
-                conversation_id: conversationId,
-                sender_type: 'system',
-                content: 'Welcome to the AI Group Chat! Select a First Responder and ask a question to begin.',
-                created_at: new Date().toISOString()
-            });
-        
-        return conversation;
     }
 
     // Get conversation context (recent messages for context)
@@ -384,8 +359,6 @@ class Database {
             console.error('Error updating conversation timestamp:', error);
         }
         
-        // Log the mode info for debugging (since we can't store it in DB)
-        console.log(`Conversation ${conversationId} mode: ${mode}, model: ${activeModelId}, stage: ${threadStage}`);
     }
 
     // Get conversation details (fallback to existing schema)

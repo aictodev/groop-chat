@@ -21,7 +21,7 @@ function App() {
     const [typingModel, setTypingModel] = useState(null);
     const [conversationTitle, setConversationTitle] = useState('AI Group Chat');
     const [conversations, setConversations] = useState([]);
-    const [activeConversationId, setActiveConversationId] = useState('00000000-0000-0000-0000-000000000002');
+    const [activeConversationId, setActiveConversationId] = useState(null);
     const [replyToMessage, setReplyToMessage] = useState(null);
     const [conversationMode, setConversationMode] = useState('group');
     const chatContainerRef = useRef(null);
@@ -55,6 +55,11 @@ function App() {
             if (response.ok) {
                 const loadedConversations = await response.json();
                 setConversations(loadedConversations);
+
+                // If no active conversation is set and we have conversations, set the first one as active
+                if (!activeConversationId && loadedConversations.length > 0) {
+                    setActiveConversationId(loadedConversations[0].id);
+                }
             }
         } catch (error) {
             console.error('Failed to load conversations:', error);
@@ -84,12 +89,49 @@ function App() {
                         time: new Date(msg.created_at || msg.time), // Handle both formats
                         model: msg.ai_models?.name || msg.model // Handle model name
                     };
+
+                    // Parse metadata for reply information
+                    if (msg.metadata) {
+                        try {
+                            const metadata = typeof msg.metadata === 'string' ? JSON.parse(msg.metadata) : msg.metadata;
+                            console.log('📖 Processing message metadata for msg', msg.id, ':', metadata);
+                            if (metadata.reply_to_message_id) {
+                                processed.replyToMessageId = metadata.reply_to_message_id;
+                                console.log('🔗 Found reply relationship:', processed.replyToMessageId);
+                            }
+                            if (metadata.conversation_mode === 'direct' || metadata.is_direct_reply) {
+                                processed.isDirectReply = true;
+                                console.log('💬 Marked as direct reply');
+                            }
+                        } catch (e) {
+                            console.warn('Failed to parse message metadata:', e);
+                        }
+                    }
+
                     console.log('Processed message:', processed);
                     return processed;
                 });
-                
-                setMessages(processedMessages);
-                
+
+                // Second pass: resolve reply relationships
+                const messagesWithReplies = processedMessages.map(msg => {
+                    if (msg.replyToMessageId) {
+                        // Find the message this is replying to
+                        const replyToMessage = processedMessages.find(m => m.id === msg.replyToMessageId);
+                        console.log('🔍 Looking for reply target:', msg.replyToMessageId, 'found:', !!replyToMessage);
+                        if (replyToMessage) {
+                            msg.replyTo = {
+                                id: replyToMessage.id,
+                                text: replyToMessage.text,
+                                model: replyToMessage.model,
+                                sender: replyToMessage.sender
+                            };
+                        }
+                    }
+                    return msg;
+                });
+
+                setMessages(messagesWithReplies);
+
                 // Update conversation title based on active conversation
                 const activeConv = conversations.find(c => c.id === activeConversationId);
                 if (activeConv) {
@@ -107,14 +149,49 @@ function App() {
                 const fallbackResponse = await fetch(`${BACKEND_URL}/api/messages`);
                 if (fallbackResponse.ok) {
                     const loadedMessages = await fallbackResponse.json();
-                    const processedMessages = loadedMessages.map(msg => ({
-                        ...msg,
-                        id: msg.id || Date.now() + Math.random(),
-                        sender: msg.sender_type || msg.sender,
-                        text: msg.content || msg.text,
-                        time: new Date(msg.created_at || msg.time)
-                    }));
-                    setMessages(processedMessages);
+                    const processedMessages = loadedMessages.map(msg => {
+                        const processed = {
+                            ...msg,
+                            id: msg.id || Date.now() + Math.random(),
+                            sender: msg.sender_type || msg.sender,
+                            text: msg.content || msg.text,
+                            time: new Date(msg.created_at || msg.time)
+                        };
+
+                        // Parse metadata for reply information (fallback)
+                        if (msg.metadata) {
+                            try {
+                                const metadata = typeof msg.metadata === 'string' ? JSON.parse(msg.metadata) : msg.metadata;
+                                if (metadata.reply_to_message_id) {
+                                    processed.replyToMessageId = metadata.reply_to_message_id;
+                                }
+                                if (metadata.conversation_mode === 'direct' || metadata.is_direct_reply) {
+                                    processed.isDirectReply = true;
+                                }
+                            } catch (e) {
+                                console.warn('Failed to parse fallback message metadata:', e);
+                            }
+                        }
+
+                        return processed;
+                    });
+
+                    // Resolve reply relationships for fallback messages
+                    const messagesWithReplies = processedMessages.map(msg => {
+                        if (msg.replyToMessageId) {
+                            const replyToMessage = processedMessages.find(m => m.id === msg.replyToMessageId);
+                            if (replyToMessage) {
+                                msg.replyTo = {
+                                    id: replyToMessage.id,
+                                    text: replyToMessage.text,
+                                    model: replyToMessage.model,
+                                    sender: replyToMessage.sender
+                                };
+                            }
+                        }
+                        return msg;
+                    });
+                    setMessages(messagesWithReplies);
                 }
             }
         } catch (error) {
@@ -161,8 +238,6 @@ function App() {
     };
 
     const handleReplyToMessage = (message) => {
-        console.log('🔄 Reply button clicked for message:', message);
-        console.log('🔄 Message ID:', message.id, 'Sender:', message.sender, 'Model:', message.model);
         
         // Don't allow replies to temporary IDs or invalid UUID formats (not stored in database)
         const messageId = message.id && message.id.toString();
@@ -170,7 +245,6 @@ function App() {
         const isTempId = messageId && messageId.startsWith('temp_');
         
         if (!isValidUUID || isTempId) {
-            console.log('🔄 Cannot reply to message with invalid/temporary ID:', messageId, 'using group mode');
             setReplyToMessage(null);
             setConversationMode('group');
             return;
@@ -178,10 +252,8 @@ function App() {
         
         setReplyToMessage(message);
         if (message.sender === 'ai') {
-            console.log('🔄 Setting conversation mode to direct');
             setConversationMode('direct');
         }
-        console.log('🔄 Reply state set successfully');
     };
 
     const clearReply = () => {
@@ -258,7 +330,6 @@ function App() {
             time: new Date(),
             replyTo: replyToMessage
         };
-        console.log('🔄 Adding user message with replyTo:', userMessage.replyTo ? 'YES' : 'NO');
         setMessages(prev => [...prev, userMessage]);
 
         // Clear reply after sending
@@ -331,10 +402,14 @@ function App() {
                 <div className="chat">
                     <div className="chat-container">
                         <div className="user-bar">
-                            <div className="avatar"><div style={{width:36,height:36,background:'#00a884',borderRadius:'50%',display:'block'}}/></div>
-                            <div className="name">{conversationTitle}<span className="status"> Online</span></div>
-                            <div className="actions more">⋮</div>
-                            <div className="actions attachment">📎</div>
+                            <div className="user-info">
+                                <div className="avatar"><div style={{width:36,height:36,background:'#00a884',borderRadius:'50%',display:'block'}}/></div>
+                                <div className="name">{conversationTitle}<span className="status"> Online</span></div>
+                            </div>
+                            <div className="actions-group">
+                                <div className="actions more">⋮</div>
+                                <div className="actions attachment">📎</div>
+                            </div>
                         </div>
                         <div className="conversation">
                             <div className="conversation-container" ref={chatContainerRef}>
@@ -492,7 +567,7 @@ const Sidebar = ({ conversations, activeConversationId, onConversationSelect, on
                         key={conversation.id}
                         name={conversation.title || 'New Chat'}
                         lastMessage={lastMessage}
-                        time={conversation.updated_at ? new Date(conversation.updated_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : ''}
+                        time={conversation.updated_at ? formatConversationTime(conversation.updated_at) : ''}
                         avatar="/robot.jpg"
                         isActive={conversation.id === activeConversationId}
                         onClick={() => onConversationSelect(conversation.id)}
@@ -579,7 +654,6 @@ const getModelColorClass = (modelName) => {
 };
 
 const MessageBubble = ({ msg, onReply }) => {
-    console.log('🔄 MessageBubble rendered with onReply:', typeof onReply, 'for msg:', msg.id, 'replyTo:', msg.replyTo);
     
     if (msg.sender === 'system') {
         return (
@@ -597,11 +671,8 @@ const MessageBubble = ({ msg, onReply }) => {
     const handleReplyClick = (e) => {
         e.preventDefault();
         e.stopPropagation();
-        console.log('🔄 Reply button clicked on MessageBubble, calling onReply for:', msg);
         if (onReply && typeof onReply === 'function') {
             onReply(msg);
-        } else {
-            console.error('🔄 onReply is not a function:', onReply);
         }
     };
 
@@ -727,4 +798,30 @@ function formatTime(dateLike) {
     const hours = d.getHours().toString().padStart(2, '0');
     const minutes = d.getMinutes().toString().padStart(2, '0');
     return `${hours}:${minutes}`;
+}
+
+function formatConversationTime(dateLike) {
+    const d = dateLike instanceof Date ? dateLike : new Date(dateLike);
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const messageDate = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+
+    const daysDiff = Math.floor((today - messageDate) / (1000 * 60 * 60 * 24));
+
+    if (daysDiff === 0) {
+        // Today - show time
+        return formatTime(d);
+    } else if (daysDiff === 1) {
+        // Yesterday
+        return 'Yesterday';
+    } else if (daysDiff < 7) {
+        // This week - show day name
+        return d.toLocaleDateString([], { weekday: 'short' }); // Mon, Tue, etc.
+    } else if (daysDiff < 365) {
+        // This year - show month and day
+        return d.toLocaleDateString([], { month: 'short', day: 'numeric' }); // Dec 15
+    } else {
+        // Older than a year - show month, day, year
+        return d.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }); // Dec 15, 2023
+    }
 }

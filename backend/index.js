@@ -60,12 +60,91 @@ function renderTemplate(template, vars) {
 app.get('/health', async (req, res) => {
     const hasApiKey = Boolean(OPENROUTER_API_KEY);
     const dbHealth = await database.healthCheck();
-    res.json({ 
-        ok: hasApiKey && dbHealth, 
-        models: ALL_MODELS, 
-        env: { hasApiKey, dbConnected: dbHealth }, 
-        version: '2.0.0' 
+
+    // Test conversations table directly
+    let conversationCount = 0;
+    try {
+        const conversations = await database.getConversations();
+        conversationCount = conversations.length;
+    } catch (e) {
+        console.error('Error testing conversations:', e);
+    }
+
+    res.json({
+        ok: hasApiKey && dbHealth,
+        models: ALL_MODELS,
+        env: { hasApiKey, dbConnected: dbHealth },
+        version: '2.0.0',
+        debug: { conversationCount }
     });
+});
+
+/**
+ * Debug endpoint to test database tables
+ */
+app.get('/debug/tables', async (req, res) => {
+    const { createClient } = require('@supabase/supabase-js');
+    const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
+
+    try {
+        // Test each table individually
+        const results = {};
+
+        // Test conversations table
+        try {
+            const { data: conversations, error: convError } = await supabase
+                .from('conversations')
+                .select('*')
+                .limit(5);
+
+            results.conversations = {
+                success: !convError,
+                error: convError?.message,
+                count: conversations?.length || 0,
+                sample: conversations?.slice(0, 2) || []
+            };
+        } catch (e) {
+            results.conversations = { success: false, error: e.message };
+        }
+
+        // Test messages table
+        try {
+            const { data: messages, error: msgError } = await supabase
+                .from('messages')
+                .select('*')
+                .limit(5);
+
+            results.messages = {
+                success: !msgError,
+                error: msgError?.message,
+                count: messages?.length || 0,
+                sample: messages?.slice(0, 2) || []
+            };
+        } catch (e) {
+            results.messages = { success: false, error: e.message };
+        }
+
+        // Test ai_models table
+        try {
+            const { data: models, error: modelError } = await supabase
+                .from('ai_models')
+                .select('*')
+                .limit(5);
+
+            results.ai_models = {
+                success: !modelError,
+                error: modelError?.message,
+                count: models?.length || 0,
+                sample: models?.slice(0, 2) || []
+            };
+        } catch (e) {
+            results.ai_models = { success: false, error: e.message };
+        }
+
+        res.json({ results });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
 });
 
 /**
@@ -74,7 +153,6 @@ app.get('/health', async (req, res) => {
 app.get('/api/messages', async (req, res) => {
     try {
         const messages = await database.getMessages();
-        console.log('Raw messages from DB:', messages.slice(0, 2)); // Debug first 2 messages
         
         // Transform messages to match frontend format
         const transformedMessages = messages.map(msg => {
@@ -133,21 +211,23 @@ app.get('/api/conversations/:conversationId/messages', async (req, res) => {
     try {
         const { conversationId } = req.params;
         const messages = await database.getMessages(conversationId);
-        
+
         // Transform messages to match frontend format
         const transformedMessages = messages.map(msg => {
             const baseMsg = {
                 id: msg.id, // Include the database ID!
                 sender: msg.sender_type,
                 text: msg.content,
-                time: new Date(msg.created_at)
+                time: new Date(msg.created_at),
+                metadata: msg.metadata // Include metadata for frontend processing
             };
-            
+
             if (msg.sender_type === 'ai' && msg.ai_models) {
                 baseMsg.model = msg.ai_models.name;
                 baseMsg.avatar = msg.ai_models.avatar;
             }
-            
+
+
             return baseMsg;
         });
         
@@ -243,7 +323,18 @@ app.post('/api/chat', async (req, res) => {
     });
 
     try {
-        const targetConversationId = conversationId || '00000000-0000-0000-0000-000000000002';
+        // Get the conversation ID, or use the first available conversation if none provided
+        let targetConversationId = conversationId;
+        if (!targetConversationId) {
+            const conversations = await database.getConversations();
+            if (conversations.length > 0) {
+                targetConversationId = conversations[0].id;
+            } else {
+                // If no conversations exist, create a new one
+                const newConv = await database.createConversation();
+                targetConversationId = newConv.id;
+            }
+        }
         const maxChars = 280;
 
         // Get conversation details and context
@@ -251,14 +342,16 @@ app.post('/api/chat', async (req, res) => {
         const conversationContext = await database.getConversationContext(targetConversationId, 10);
         
         // Save user message to database
-        await database.createUserMessage(prompt, targetConversationId, replyToMessageId, conversationMode);
+        const userMessage = await database.createUserMessage(prompt, targetConversationId, replyToMessageId, conversationMode);
+
+        // For AI replies: target the user's new message, not the original replyToMessageId
+        const aiReplyTargetId = userMessage.id;
 
         if (conversationMode === 'direct' && replyToMessageId) {
             // Handle direct conversation mode (1-on-1)
             try {
                 const replyMessage = await database.getMessageById(replyToMessageId);
                 if (!replyMessage || !replyMessage.ai_model_id) {
-                    console.log('Could not find reply message, falling back to group mode');
                     conversationMode = 'group';
                 }
                 
@@ -270,7 +363,6 @@ app.post('/api/chat', async (req, res) => {
                     try {
                         await database.updateConversationMode(targetConversationId, 'direct', targetModel);
                     } catch (e) {
-                        console.log('Could not update conversation mode, continuing with direct reply');
                     }
 
                     // Send typing indicator
@@ -293,12 +385,11 @@ app.post('/api/chat', async (req, res) => {
                     const systemPrompt = renderTemplate(DIRECT_CONVERSATION_TPL, {
                         MAX_CHARS: maxChars,
                         USER_PROMPT: prompt,
-                        ORIGINAL_MESSAGE: replyMessage.content,
                         CONVERSATION_HISTORY: directConversationHistory
                     });
 
                     const response = await callOpenRouter(targetModel, prompt, [], maxChars, systemPrompt);
-                    await database.createAIMessage(response, targetModel, false, targetConversationId, replyToMessageId, 'direct');
+                    await database.createAIMessage(response, targetModel, false, targetConversationId, aiReplyTargetId, 'direct');
                     
                     res.write(`data: ${JSON.stringify({ 
                         type: 'message',
@@ -314,7 +405,6 @@ app.post('/api/chat', async (req, res) => {
                     return;
                 }
             } catch (e) {
-                console.log('Error in direct conversation mode, falling back to group:', e.message);
                 conversationMode = 'group';
             }
         }
@@ -354,7 +444,7 @@ app.post('/api/chat', async (req, res) => {
 
             // First responder
             const firstResponderResponse = await callOpenRouter(firstResponder, prompt, [], maxChars, systemPrompt);
-            await database.createAIMessage(firstResponderResponse, firstResponder, true, targetConversationId, replyToMessageId, 'group');
+            await database.createAIMessage(firstResponderResponse, firstResponder, true, targetConversationId, aiReplyTargetId, 'group');
             
             res.write(`data: ${JSON.stringify({ 
                 type: 'message',
@@ -389,7 +479,7 @@ app.post('/api/chat', async (req, res) => {
                 });
 
                 const newResponse = await callOpenRouter(model, uniquenessPrompt, chatHistory, maxChars, systemPrompt);
-                await database.createAIMessage(newResponse, model, false, targetConversationId, replyToMessageId, 'group');
+                await database.createAIMessage(newResponse, model, false, targetConversationId, aiReplyTargetId, 'group');
                 
                 res.write(`data: ${JSON.stringify({ 
                     type: 'message',

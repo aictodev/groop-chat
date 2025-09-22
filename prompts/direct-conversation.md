@@ -10,10 +10,9 @@ Context:
 - Max length: {{MAX_CHARS}} characters
 - Response must be plain text only
 
-Original Message Being Replied To:
-"{{ORIGINAL_MESSAGE}}"
-
 Conversation History:
 {{CONVERSATION_HISTORY}}
 
-User's Reply: "{{USER_PROMPT}}"
+Current User Question: "{{USER_PROMPT}}"
+
+Please respond directly to the user's current question above.
