@@ -1,0 +1,275 @@
+/* Minimal WhatsApp CSS - Only Message Bubbles and Essential Styles */
+
+/* Essential Box Model */
+*, *:before, *:after {
+  box-sizing: inherit;
+}
+
+html {
+  box-sizing: border-box;
+  height: 100vh;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-family: "Roboto", sans-serif;
+  margin: 0;
+  padding: 0;
+  height: 100vh;
+}
+
+#root { height: 100vh; }
+
+/* Message Bubbles - Keep original styling for now */
+.message {
+  width: auto;
+  height: auto;
+  position: relative;
+  margin: 16px 0;
+  background: #ffffff;
+  border-radius: 25px;
+  padding: 8px 16px;
+  color: #303030;
+  font-size: 16px;
+  line-height: 1.4;
+  max-width: 80%;
+  word-wrap: break-word;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  z-index: 1;
+}
+
+.message.sent {
+  background: #d9fdd3;
+  color: #303030;
+  margin-left: auto;
+  margin-right: 16px;
+}
+
+.message.received {
+  background: #ffffff;
+  color: #303030;
+  margin-left: 16px;
+  margin-right: auto;
+}
+
+.message.sent:before {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  bottom: 0;
+  right: -8px;
+  height: 20px;
+  width: 20px;
+  background: #d9fdd3;
+  border-bottom-left-radius: 15px;
+}
+
+.message.sent:after {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  bottom: 0;
+  right: -10px;
+  width: 10px;
+  height: 20px;
+  background: #efeae2;
+  border-bottom-left-radius: 10px;
+}
+
+.message.received:before {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  bottom: 0;
+  left: -7px;
+  height: 20px;
+  width: 20px;
+  background: #ffffff;
+  border-bottom-right-radius: 15px;
+}
+
+.message.received:after {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  bottom: 0;
+  left: -10px;
+  width: 10px;
+  height: 20px;
+  background: #efeae2;
+  border-bottom-right-radius: 10px;
+}
+
+.message-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 4px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.model-name {
+  color: #00a884;
+  font-weight: 600;
+}
+
+.direct-indicator {
+  color: #666;
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.message-content {
+  margin: 8px 0;
+  white-space: pre-wrap;
+}
+
+.message-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 8px;
+  font-size: 12px;
+  color: #667781;
+}
+
+.message-time {
+  font-size: 11px;
+  color: #667781;
+  white-space: nowrap;
+}
+
+.reply-button {
+  background: none;
+  border: none;
+  color: #00a884;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px 4px;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.reply-button:hover {
+  background-color: rgba(0, 168, 132, 0.1);
+}
+
+/* Reply Context Styles */
+.reply-context {
+  display: flex;
+  align-items: flex-start;
+  margin-bottom: 8px;
+  padding: 8px;
+  background: rgba(0, 168, 132, 0.05);
+  border-radius: 8px;
+  border-left: 3px solid #00a884;
+}
+
+.reply-context-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.reply-context-sender {
+  font-weight: 600;
+  color: #00a884;
+  font-size: 12px;
+  margin-bottom: 2px;
+}
+
+.reply-context-text {
+  font-size: 13px;
+  color: #667781;
+  font-style: italic;
+  line-height: 1.3;
+}
+
+/* Direct Reply Indicator */
+.message.direct-reply {
+  border-left: 3px solid #00a884;
+  margin-left: 20px;
+}
+
+.message.sent.direct-reply {
+  border-left: none;
+  border-right: 3px solid #00a884;
+  margin-right: 20px;
+  margin-left: auto;
+}
+
+/* Typing Indicator */
+.typing-indicator {
+  display: flex;
+  align-items: center;
+  padding: 16px;
+  margin: 16px;
+  background: #ffffff;
+  border-radius: 25px;
+  max-width: 80%;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.typing-indicator:before {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  bottom: 0;
+  left: -7px;
+  height: 20px;
+  width: 20px;
+  background: #ffffff;
+  border-bottom-right-radius: 15px;
+}
+
+.typing-indicator:after {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  bottom: 0;
+  left: -10px;
+  width: 10px;
+  height: 20px;
+  background: #efeae2;
+  border-bottom-right-radius: 10px;
+}
+
+.typing-dots {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.typing-dots .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #999;
+  animation: typing 1.4s infinite ease-in-out;
+}
+
+.typing-dots .dot:nth-child(1) {
+  animation-delay: 0s;
+}
+
+.typing-dots .dot:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.typing-dots .dot:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes typing {
+  0%, 60%, 100% {
+    transform: translateY(0);
+    opacity: 0.5;
+  }
+  30% {
+    transform: translateY(-10px);
+    opacity: 1;
+  }
+}

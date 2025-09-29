@@ -4,13 +4,40 @@ const axios = require('axios');
 const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
+const multer = require('multer');
+const sharp = require('sharp');
+const { v4: uuidv4 } = require('uuid');
 const database = require('./database');
+const { authenticateUser, optionalAuth } = require('./auth');
+
+// Alias for consistency
+const requireAuth = authenticateUser;
 
 const app = express();
 app.use(express.json());
 app.use(cors()); // Enable CORS for frontend communication
 
+// Serve static files from uploads directory
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+// Configure multer for file uploads
+const storage = multer.memoryStorage();
+const upload = multer({
+    storage: storage,
+    limits: {
+        fileSize: 5 * 1024 * 1024, // 5MB limit
+    },
+    fileFilter: (req, file, cb) => {
+        if (file.mimetype.startsWith('image/')) {
+            cb(null, true);
+        } else {
+            cb(new Error('Only image files are allowed!'), false);
+        }
+    }
+});
+
 const OPENROUTER_API_KEY = (process.env.OPENROUTER_API_KEY || '').trim();
+const FALLBACK_USER_ID = '00000000-0000-0000-0000-000000000001';
 const API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
 // Define the models participating in the chat
@@ -20,7 +47,8 @@ const ALL_MODELS = [
     "anthropic/claude-3.5-sonnet",
     "meta-llama/llama-3-8b-instruct",
     "deepseek/deepseek-chat",
-    "qwen/qwen-2.5-7b-instruct"
+    "qwen/qwen-2.5-7b-instruct",
+    "moonshotai/kimi-k2"
 ];
 
 // A simple mapping for model names and avatars for the frontend
@@ -30,7 +58,8 @@ const MODEL_DETAILS = {
     "anthropic/claude-3.5-sonnet": { name: "Claude", avatar: " A " },
     "meta-llama/llama-3-8b-instruct": { name: "Llama", avatar: " L " },
     "deepseek/deepseek-chat": { name: "DeepSeek Chat", avatar: " D " },
-    "qwen/qwen-2.5-7b-instruct": { name: "Qwen", avatar: " Q " }
+    "qwen/qwen-2.5-7b-instruct": { name: "Qwen", avatar: " Q " },
+    "moonshotai/kimi-k2": { name: "Kimi K2", avatar: " K " }
 };
 
 // --- Load prompt templates ---
@@ -52,6 +81,56 @@ function renderTemplate(template, vars) {
         text = text.split(`{{${k}}}`).join(String(v));
     }
     return text;
+}
+
+// Get user's custom prompt or fall back to default template
+async function getUserPromptOrDefault(userId, promptType) {
+    try {
+        // Try to get user's active prompt for this type
+        const userPrompts = await database.getUserPrompts(userId, promptType);
+        const activePrompt = userPrompts.find(p => p.is_active && p.is_default);
+
+        if (activePrompt) {
+            return activePrompt.content;
+        }
+
+        // Fall back to system default prompts
+        const systemPrompts = await database.getUserPrompts('00000000-0000-0000-0000-000000000001', promptType);
+        const systemDefault = systemPrompts.find(p => p.is_active && p.is_default);
+
+        if (systemDefault) {
+            return systemDefault.content;
+        }
+
+        // Final fallback to hardcoded templates
+        switch (promptType) {
+            case 'base-system':
+                return BASE_SYSTEM_TPL;
+            case 'uniqueness':
+                return UNIQUENESS_TPL;
+            case 'thread-context':
+                return THREAD_CONTEXT_TPL;
+            case 'direct-conversation':
+                return DIRECT_CONVERSATION_TPL;
+            default:
+                return '';
+        }
+    } catch (error) {
+        console.error(`Error getting prompt for type ${promptType}:`, error);
+        // Return hardcoded template as fallback
+        switch (promptType) {
+            case 'base-system':
+                return BASE_SYSTEM_TPL;
+            case 'uniqueness':
+                return UNIQUENESS_TPL;
+            case 'thread-context':
+                return THREAD_CONTEXT_TPL;
+            case 'direct-conversation':
+                return DIRECT_CONVERSATION_TPL;
+            default:
+                return '';
+        }
+    }
 }
 
 /**
@@ -150,10 +229,19 @@ app.get('/debug/tables', async (req, res) => {
 /**
  * Get conversation messages
  */
-app.get('/api/messages', async (req, res) => {
+app.get('/api/messages', optionalAuth, async (req, res) => {
     try {
-        const messages = await database.getMessages();
-        
+        const userId = req.user?.id;
+
+        let messages;
+        if (userId) {
+            messages = await database.getAllMessagesForUser(userId);
+            console.log(`Found ${messages.length} messages for user ${userId}`);
+        } else {
+            messages = await database.getMessages();
+            console.log(`Loaded ${messages.length} messages from default conversation`);
+        }
+
         // Transform messages to match frontend format
         const transformedMessages = messages.map(msg => {
             const baseMsg = {
@@ -162,12 +250,12 @@ app.get('/api/messages', async (req, res) => {
                 text: msg.content,
                 time: new Date(msg.created_at)
             };
-            
+
             if (msg.sender_type === 'ai' && msg.ai_models) {
                 baseMsg.model = msg.ai_models.name;
                 baseMsg.avatar = msg.ai_models.avatar;
             }
-            
+
             return baseMsg;
         });
         
@@ -181,7 +269,7 @@ app.get('/api/messages', async (req, res) => {
 /**
  * Get all conversations for the user
  */
-app.get('/api/conversations', async (req, res) => {
+app.get('/api/conversations', optionalAuth, async (req, res) => {
     try {
         const conversations = await database.getConversations();
         res.json(conversations);
@@ -194,7 +282,7 @@ app.get('/api/conversations', async (req, res) => {
 /**
  * Create a new conversation
  */
-app.post('/api/conversations', async (req, res) => {
+app.post('/api/conversations', authenticateUser, async (req, res) => {
     try {
         const conversation = await database.createConversation();
         res.json(conversation);
@@ -207,10 +295,11 @@ app.post('/api/conversations', async (req, res) => {
 /**
  * Get messages for a specific conversation
  */
-app.get('/api/conversations/:conversationId/messages', async (req, res) => {
+app.get('/api/conversations/:conversationId/messages', optionalAuth, async (req, res) => {
     try {
         const { conversationId } = req.params;
-        const messages = await database.getMessages(conversationId);
+        const userId = req.user?.id || null;
+        const messages = await database.getMessages(conversationId, userId);
 
         // Transform messages to match frontend format
         const transformedMessages = messages.map(msg => {
@@ -245,6 +334,10 @@ app.post('/api/generate-title', async (req, res) => {
     const { conversationId } = req.body;
     
     try {
+        if (!conversationId) {
+            return res.json({ title: 'New Chat' });
+        }
+
         const messages = await database.getMessages(conversationId);
         
         // Get the first few user messages to generate a title
@@ -293,20 +386,32 @@ Return ONLY the title, no quotes or extra text.`;
 /**
  * Enhanced chat endpoint with conversation modes and reply support
  */
-app.post('/api/chat', async (req, res) => {
-    const { prompt, firstResponder, conversationId, replyToMessageId } = req.body;
+app.post('/api/chat', optionalAuth, async (req, res) => {
+    const { prompt, firstResponder, conversationId, replyToMessageId, characterLimit, selectedModels } = req.body;
     let conversationMode = req.body.conversationMode || 'group';
 
     if (!prompt) {
         return res.status(400).json({ error: 'Prompt is required.' });
     }
 
-    if (conversationMode === 'group' && !firstResponder) {
-        return res.status(400).json({ error: 'FirstResponder is required for group mode.' });
-    }
-
-    if (conversationMode === 'group' && !ALL_MODELS.includes(firstResponder)) {
-        return res.status(400).json({ error: 'Invalid firstResponder model.' });
+    // Determine which models to use based on new selectedModels parameter
+    let modelsToUse = [];
+    if (conversationMode === 'group') {
+        if (selectedModels && Array.isArray(selectedModels) && selectedModels.length > 0) {
+            // Use the custom selected models in the specified order
+            modelsToUse = selectedModels.filter(model => ALL_MODELS.includes(model));
+            if (modelsToUse.length === 0) {
+                return res.status(400).json({ error: 'No valid models in selectedModels.' });
+            }
+        } else if (firstResponder) {
+            // Fall back to legacy firstResponder + all other models
+            if (!ALL_MODELS.includes(firstResponder)) {
+                return res.status(400).json({ error: 'Invalid firstResponder model.' });
+            }
+            modelsToUse = [firstResponder, ...ALL_MODELS.filter(m => m !== firstResponder)];
+        } else {
+            return res.status(400).json({ error: 'Either selectedModels or firstResponder is required for group mode.' });
+        }
     }
 
     if (!OPENROUTER_API_KEY) {
@@ -335,14 +440,22 @@ app.post('/api/chat', async (req, res) => {
                 targetConversationId = newConv.id;
             }
         }
-        const maxChars = 280;
+        const maxChars = characterLimit || 280;
 
         // Get conversation details and context
         const conversationDetails = await database.getConversationDetails(targetConversationId);
         const conversationContext = await database.getConversationContext(targetConversationId, 10);
         
         // Save user message to database
-        const userMessage = await database.createUserMessage(prompt, targetConversationId, replyToMessageId, conversationMode);
+        const userId = req.user?.id || FALLBACK_USER_ID;
+        console.log('Creating user message with:', {
+            userId,
+            conversationId: targetConversationId,
+            replyToMessageId,
+            conversationMode
+        });
+
+        const userMessage = await database.createUserMessage(prompt, targetConversationId, replyToMessageId, conversationMode, userId);
 
         // For AI replies: target the user's new message, not the original replyToMessageId
         const aiReplyTargetId = userMessage.id;
@@ -389,7 +502,7 @@ app.post('/api/chat', async (req, res) => {
                     });
 
                     const response = await callOpenRouter(targetModel, prompt, [], maxChars, systemPrompt);
-                    await database.createAIMessage(response, targetModel, false, targetConversationId, aiReplyTargetId, 'direct');
+                    await database.createAIMessage(response, targetModel, false, targetConversationId, aiReplyTargetId, 'direct', userId);
                     
                     res.write(`data: ${JSON.stringify({ 
                         type: 'message',
@@ -427,37 +540,41 @@ app.post('/api/chat', async (req, res) => {
             }).join('\n');
 
             // Choose system prompt based on thread stage
-            const systemPromptTemplate = isOngoingThread ? THREAD_CONTEXT_TPL : BASE_SYSTEM_TPL;
+            const promptType = isOngoingThread ? 'thread-context' : 'base-system';
+            const systemPromptTemplate = await getUserPromptOrDefault(userId, promptType);
             const systemPrompt = renderTemplate(systemPromptTemplate, {
                 MAX_CHARS: maxChars,
                 USER_PROMPT: prompt,
                 CONVERSATION_HISTORY: conversationHistory
             });
 
-            // Send typing indicator for first responder
-            const firstResponderDetails = MODEL_DETAILS[firstResponder] || { name: firstResponder, avatar: '?' };
-            res.write(`data: ${JSON.stringify({ 
-                type: 'typing', 
-                model: firstResponderDetails.name,
-                avatar: firstResponderDetails.avatar
+            // Process models in the specified order
+            const firstModel = modelsToUse[0];
+            const firstModelDetails = MODEL_DETAILS[firstModel] || { name: firstModel, avatar: '?' };
+
+            // Send typing indicator for first model
+            res.write(`data: ${JSON.stringify({
+                type: 'typing',
+                model: firstModelDetails.name,
+                avatar: firstModelDetails.avatar
             })}\n\n`);
 
-            // First responder
-            const firstResponderResponse = await callOpenRouter(firstResponder, prompt, [], maxChars, systemPrompt);
-            await database.createAIMessage(firstResponderResponse, firstResponder, true, targetConversationId, aiReplyTargetId, 'group');
+            // First model response
+            const firstResponderResponse = await callOpenRouter(firstModel, prompt, [], maxChars, systemPrompt);
+            await database.createAIMessage(firstResponderResponse, firstModel, true, targetConversationId, aiReplyTargetId, 'group', userId);
             
-            res.write(`data: ${JSON.stringify({ 
+            res.write(`data: ${JSON.stringify({
                 type: 'message',
-                model: firstResponderDetails.name, 
-                avatar: firstResponderDetails.avatar, 
-                text: firstResponderResponse 
+                model: firstModelDetails.name,
+                avatar: firstModelDetails.avatar,
+                text: firstResponderResponse
             })}\n\n`);
 
             chatHistory.push({ role: 'assistant', content: firstResponderResponse });
 
-            // Other models: sequential responses with enhanced context
-            const otherModels = ALL_MODELS.filter(m => m !== firstResponder);
-            for (const model of otherModels) {
+            // Remaining models: sequential responses with enhanced context
+            const remainingModels = modelsToUse.slice(1);
+            for (const model of remainingModels) {
                 const modelDetails = MODEL_DETAILS[model] || { name: model, avatar: '?' };
                 
                 // Send typing indicator
@@ -469,8 +586,9 @@ app.post('/api/chat', async (req, res) => {
 
                 // Create enhanced uniqueness prompt with conversation context
                 const prior = chatHistory.map(msg => `- "${msg.content}"`).join('\n');
-                const uniquenessPromptTemplate = isOngoingThread ? THREAD_CONTEXT_TPL : UNIQUENESS_TPL;
-                
+                const uniquenessPromptType = isOngoingThread ? 'thread-context' : 'uniqueness';
+                const uniquenessPromptTemplate = await getUserPromptOrDefault(userId, uniquenessPromptType);
+
                 const uniquenessPrompt = renderTemplate(uniquenessPromptTemplate, {
                     MAX_CHARS: maxChars,
                     USER_PROMPT: prompt,
@@ -479,7 +597,7 @@ app.post('/api/chat', async (req, res) => {
                 });
 
                 const newResponse = await callOpenRouter(model, uniquenessPrompt, chatHistory, maxChars, systemPrompt);
-                await database.createAIMessage(newResponse, model, false, targetConversationId, aiReplyTargetId, 'group');
+                await database.createAIMessage(newResponse, model, false, targetConversationId, aiReplyTargetId, 'group', userId);
                 
                 res.write(`data: ${JSON.stringify({ 
                     type: 'message',
@@ -554,6 +672,291 @@ async function callOpenRouter(model, prompt, history = [], maxLength = 280, syst
         // Return a graceful error message instead of throwing
         return `Error: Could not get a response from ${model}.`;
     }
+}
+
+// ===== USER PROMPTS API ENDPOINTS =====
+
+// Get user prompts (optionally filtered by type)
+app.get('/api/prompts', requireAuth, async (req, res) => {
+    try {
+        const { type } = req.query;
+        const prompts = await database.getUserPrompts(req.user.id, type);
+        res.json(prompts);
+    } catch (error) {
+        console.error('Error fetching user prompts:', error);
+        res.status(500).json({ error: 'Failed to fetch prompts' });
+    }
+});
+
+// Create a new user prompt
+app.post('/api/prompts', requireAuth, async (req, res) => {
+    try {
+        const { prompt_type, title, content, is_default } = req.body;
+
+        if (!prompt_type || !title || !content) {
+            return res.status(400).json({ error: 'prompt_type, title, and content are required' });
+        }
+
+        const validTypes = ['base-system', 'uniqueness', 'thread-context', 'direct-conversation'];
+        if (!validTypes.includes(prompt_type)) {
+            return res.status(400).json({ error: 'Invalid prompt_type' });
+        }
+
+        const prompt = await database.createUserPrompt(req.user.id, prompt_type, title, content, is_default);
+        res.status(201).json(prompt);
+    } catch (error) {
+        console.error('Error creating user prompt:', error);
+        res.status(500).json({ error: 'Failed to create prompt' });
+    }
+});
+
+// Update a user prompt
+app.put('/api/prompts/:id', requireAuth, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const updates = req.body;
+
+        const prompt = await database.updateUserPrompt(req.user.id, id, updates);
+        res.json(prompt);
+    } catch (error) {
+        console.error('Error updating user prompt:', error);
+        res.status(500).json({ error: 'Failed to update prompt' });
+    }
+});
+
+// Delete a user prompt
+app.delete('/api/prompts/:id', requireAuth, async (req, res) => {
+    try {
+        const { id } = req.params;
+        await database.deleteUserPrompt(req.user.id, id);
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Error deleting user prompt:', error);
+        res.status(500).json({ error: 'Failed to delete prompt' });
+    }
+});
+
+// Profile picture upload endpoint
+app.post('/api/profile/avatar', optionalAuth, upload.single('avatar'), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ error: 'No image file provided' });
+        }
+
+        const userId = req.user?.id || FALLBACK_USER_ID;
+        const fileName = `${userId}_${uuidv4()}.jpg`;
+        const filePath = path.join(__dirname, 'uploads', 'profiles', fileName);
+
+        // Ensure directory exists
+        const dir = path.dirname(filePath);
+        if (!fs.existsSync(dir)) {
+            fs.mkdirSync(dir, { recursive: true });
+        }
+
+        // Process and save image using sharp
+        await sharp(req.file.buffer)
+            .resize(200, 200, { fit: 'cover' })
+            .jpeg({ quality: 85 })
+            .toFile(filePath);
+
+        // Update user avatar_url in database
+        const avatarUrl = `/uploads/profiles/${fileName}`;
+        await database.updateUserAvatar(userId, avatarUrl);
+
+        res.json({
+            success: true,
+            avatarUrl: avatarUrl,
+            message: 'Profile picture updated successfully'
+        });
+
+    } catch (error) {
+        console.error('Error uploading profile picture:', error);
+        res.status(500).json({ error: 'Failed to upload profile picture' });
+    }
+});
+
+// Get user profile information
+app.get('/api/profile', optionalAuth, async (req, res) => {
+    try {
+        const userId = req.user?.id || FALLBACK_USER_ID;
+        const profile = await database.getUserProfile(userId);
+        res.json(profile);
+    } catch (error) {
+        console.error('Error fetching user profile:', error);
+        res.status(500).json({ error: 'Failed to fetch profile' });
+    }
+});
+
+// Update user display name
+app.put('/api/profile/display-name', optionalAuth, async (req, res) => {
+    try {
+        const { displayName } = req.body;
+        const userId = req.user?.id || FALLBACK_USER_ID;
+
+        if (!displayName || typeof displayName !== 'string') {
+            return res.status(400).json({ error: 'Display name is required and must be a string' });
+        }
+
+        if (displayName.length > 100) {
+            return res.status(400).json({ error: 'Display name must be less than 100 characters' });
+        }
+
+        const updatedProfile = await database.updateUserDisplayName(userId, displayName.trim());
+        res.json({
+            success: true,
+            displayName: updatedProfile.display_name,
+            message: 'Display name updated successfully'
+        });
+    } catch (error) {
+        console.error('Error updating display name:', error);
+        res.status(500).json({ error: 'Failed to update display name' });
+    }
+});
+
+// Conversation image upload endpoint
+app.post('/api/conversations/:conversationId/avatar', requireAuth, upload.single('avatar'), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ error: 'No image file provided' });
+        }
+
+        const { conversationId } = req.params;
+        const fileName = `${conversationId}_${uuidv4()}.jpg`;
+        const filePath = path.join(__dirname, 'uploads', 'conversations', fileName);
+
+        // Ensure directory exists
+        const dir = path.dirname(filePath);
+        if (!fs.existsSync(dir)) {
+            fs.mkdirSync(dir, { recursive: true });
+        }
+
+        // Process and save image using sharp
+        await sharp(req.file.buffer)
+            .resize(150, 150, { fit: 'cover' })
+            .jpeg({ quality: 85 })
+            .toFile(filePath);
+
+        // Update conversation avatar in settings
+        const avatarUrl = `/uploads/conversations/${fileName}`;
+        await database.updateConversationAvatar(conversationId, avatarUrl);
+
+        res.json({
+            success: true,
+            avatarUrl: avatarUrl,
+            message: 'Conversation image updated successfully'
+        });
+
+    } catch (error) {
+        console.error('Error uploading conversation image:', error);
+        res.status(500).json({ error: 'Failed to upload conversation image' });
+    }
+});
+
+// AI-generated conversation image endpoint
+app.post('/api/conversations/:conversationId/generate-avatar', requireAuth, async (req, res) => {
+    try {
+        const { conversationId } = req.params;
+
+        // Get conversation summary
+        const messages = await database.getConversationMessages(conversationId);
+        if (!messages.length) {
+            return res.status(400).json({ error: 'No messages found to generate image from' });
+        }
+
+        // Create a summary prompt for image generation
+        const recentMessages = messages.slice(-10); // Last 10 messages
+        const messageText = recentMessages
+            .filter(msg => msg.sender_type === 'user' || msg.sender_type === 'ai')
+            .map(msg => msg.content)
+            .join(' ')
+            .slice(0, 500); // Limit to 500 chars
+
+        // Generate a concise visual prompt
+        const imagePrompt = await generateImagePrompt(messageText);
+
+        // For now, we'll create a placeholder image with the prompt text
+        // In a production environment, you would integrate with DALL-E, Midjourney, or Stable Diffusion
+        const fileName = `${conversationId}_generated_${uuidv4()}.jpg`;
+        const filePath = path.join(__dirname, 'uploads', 'conversations', fileName);
+
+        // Create a placeholder image with conversation theme
+        await createPlaceholderImage(imagePrompt, filePath);
+
+        const avatarUrl = `/uploads/conversations/${fileName}`;
+        await database.updateConversationAvatar(conversationId, avatarUrl);
+
+        res.json({
+            success: true,
+            avatarUrl: avatarUrl,
+            prompt: imagePrompt,
+            message: 'AI-generated conversation image created successfully'
+        });
+
+    } catch (error) {
+        console.error('Error generating conversation image:', error);
+        res.status(500).json({ error: 'Failed to generate conversation image' });
+    }
+});
+
+// Helper function to generate image prompt from conversation
+async function generateImagePrompt(conversationText) {
+    try {
+        const prompt = `Based on this conversation snippet: "${conversationText}", create a short, visual description (max 50 words) for an abstract, colorful image that represents the conversation theme. Focus on mood, colors, and simple visual elements.`;
+
+        // Use OpenRouter API to generate the image prompt
+        const response = await axios.post(API_URL, {
+            model: "openai/gpt-4o-mini",
+            messages: [
+                {
+                    role: "system",
+                    content: "You are a helpful assistant that creates concise visual descriptions for image generation. Keep descriptions under 50 words and focus on abstract, colorful, artistic elements."
+                },
+                {
+                    role: "user",
+                    content: prompt
+                }
+            ],
+            max_tokens: 100,
+            temperature: 0.7
+        }, {
+            headers: {
+                'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+                'Content-Type': 'application/json',
+                'HTTP-Referer': 'http://localhost:7001',
+                'X-Title': 'AI Group Chat'
+            }
+        });
+
+        return response.data.choices[0].message.content.trim();
+    } catch (error) {
+        console.error('Error generating image prompt:', error);
+        return "Colorful abstract conversation bubbles floating in space";
+    }
+}
+
+// Helper function to create placeholder image
+async function createPlaceholderImage(prompt, filePath) {
+    // Create a colorful gradient placeholder image with the prompt overlay
+    const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FECA57', '#FF9FF3'];
+    const randomColor = colors[Math.floor(Math.random() * colors.length)];
+
+    // Create a simple colored circle as placeholder
+    const svg = `
+        <svg width="150" height="150" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+                <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" style="stop-color:${randomColor};stop-opacity:1" />
+                    <stop offset="100%" style="stop-color:${randomColor}80;stop-opacity:1" />
+                </linearGradient>
+            </defs>
+            <circle cx="75" cy="75" r="70" fill="url(#grad1)" />
+            <text x="75" y="80" font-family="Arial, sans-serif" font-size="12" fill="white" text-anchor="middle">AI</text>
+        </svg>
+    `;
+
+    await sharp(Buffer.from(svg))
+        .jpeg({ quality: 85 })
+        .toFile(filePath);
 }
 
 const PORT = process.env.PORT || 7001;

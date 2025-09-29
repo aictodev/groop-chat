@@ -1,5 +1,21 @@
 import React, { useState, useEffect, useRef } from 'react';
 import './reply-styles.css';
+import { useAuth } from './AuthContext';
+import ModelManager from './components/ModelManager';
+import ProfilePictureUpload from './components/ProfilePictureUpload';
+import EditableDisplayName from './components/EditableDisplayName';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { ConversationAvatar } from "@/components/ui/avatar";
+import { cn } from "@/lib/utils";
 
 // --- Configuration ---
 const MODELS = [
@@ -9,14 +25,16 @@ const MODELS = [
     { id: "meta-llama/llama-3-8b-instruct", name: "Llama" },
     { id: "deepseek/deepseek-chat", name: "DeepSeek Chat" },
     { id: "qwen/qwen-2.5-7b-instruct", name: "Qwen" },
+    { id: "moonshotai/kimi-k2", name: "Kimi K2" },
 ];
 const BACKEND_URL = 'http://localhost:7001';
 
 // --- Main App Component ---
 function App() {
+    const { user, signOut, session } = useAuth();
     const [messages, setMessages] = useState([]);
     const [input, setInput] = useState('');
-    const [firstResponder, setFirstResponder] = useState(MODELS[0].id);
+    const [firstResponder] = useState(MODELS[0].id);
     const [isLoading, setIsLoading] = useState(false);
     const [typingModel, setTypingModel] = useState(null);
     const [conversationTitle, setConversationTitle] = useState('AI Group Chat');
@@ -24,16 +42,56 @@ function App() {
     const [activeConversationId, setActiveConversationId] = useState(null);
     const [replyToMessage, setReplyToMessage] = useState(null);
     const [conversationMode, setConversationMode] = useState('group');
+    const [currentView, setCurrentView] = useState('chat'); // 'chat' or 'profile' - ensure always starts in chat
+    const [userPrompts, setUserPrompts] = useState([]);
+    const [editingPrompt, setEditingPrompt] = useState(null);
+    const [characterLimit, setCharacterLimit] = useState(280);
+    const [selectedModels, setSelectedModels] = useState(MODELS.map(m => m.id));
+    const [userProfile, setUserProfile] = useState(null);
     const chatContainerRef = useRef(null);
+
+    const getConversationById = (conversationId) => {
+        if (!conversationId) {
+            return null;
+        }
+        return conversations.find((conversation) => conversation.id === conversationId) || null;
+    };
+
+    const getConversationAvatarUrl = (conversation) => {
+        if (!conversation) {
+            return null;
+        }
+
+        const storedAvatar = conversation.settings?.avatar_url;
+        if (!storedAvatar) {
+            return null;
+        }
+
+        return storedAvatar.startsWith('http')
+            ? storedAvatar
+            : `${BACKEND_URL}${storedAvatar}`;
+    };
+
+    // Helper function to get auth headers
+    const getAuthHeaders = () => {
+        const headers = { 'Content-Type': 'application/json' };
+        if (session?.access_token) {
+            headers.Authorization = `Bearer ${session.access_token}`;
+        }
+        return headers;
+    };
 
     // Load existing messages on component mount
     useEffect(() => {
         const initializeApp = async () => {
             await loadConversations();
             await loadMessages();
+            if (user) {
+                await loadUserProfile();
+            }
         };
         initializeApp();
-    }, []);
+    }, [user]);
 
     // Load messages when active conversation changes
     useEffect(() => {
@@ -49,9 +107,33 @@ function App() {
         }
     }, [messages]);
 
+
+    const loadUserProfile = async () => {
+        try {
+            const response = await fetch(`${BACKEND_URL}/api/profile`, {
+                headers: getAuthHeaders()
+            });
+            if (response.ok) {
+                const profile = await response.json();
+                setUserProfile(profile);
+            }
+        } catch (error) {
+            console.error('Failed to load user profile:', error);
+        }
+    };
+
+    const handleAvatarUpdate = (avatarUrl) => {
+        setUserProfile(prev => ({
+            ...prev,
+            avatar_url: avatarUrl.replace('http://localhost:7001', '')
+        }));
+    };
+
     const loadConversations = async () => {
         try {
-            const response = await fetch(`${BACKEND_URL}/api/conversations`);
+            const response = await fetch(`${BACKEND_URL}/api/conversations`, {
+                headers: getAuthHeaders()
+            });
             if (response.ok) {
                 const loadedConversations = await response.json();
                 setConversations(loadedConversations);
@@ -74,7 +156,9 @@ function App() {
             
             console.log('Loading messages from:', url);
             
-            const response = await fetch(url);
+            const response = await fetch(url, {
+                headers: getAuthHeaders()
+            });
             if (response.ok) {
                 const loadedMessages = await response.json();
                 console.log('Loaded messages:', loadedMessages.length);
@@ -207,7 +291,7 @@ function App() {
         try {
             const response = await fetch(`${BACKEND_URL}/api/conversations`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
+                headers: getAuthHeaders()
             });
             if (response.ok) {
                 const newConversation = await response.json();
@@ -263,18 +347,18 @@ function App() {
 
     const handleStreamEvent = (data) => {
         switch (data.type) {
-            case 'typing':
+            case 'typing': {
                 setTypingModel({
                     model: data.model,
                     avatar: data.avatar
                 });
                 break;
-                
-            case 'message':
-                // Clear typing indicator and add message
+            }
+
+            case 'message': {
                 setTypingModel(null);
                 const aiMessage = {
-                    id: `temp_ai_${Date.now()}_${Math.random()}`, // Temporary ID for streaming messages
+                    id: `temp_ai_${Date.now()}_${Math.random()}`,
                     sender: 'ai',
                     model: data.model,
                     avatar: data.avatar,
@@ -283,31 +367,31 @@ function App() {
                     isDirectReply: data.isDirectReply || false
                 };
                 setMessages(prev => [...prev, aiMessage]);
-                
-                // Clear reply if this was a direct response
+
                 if (data.isDirectReply) {
                     setReplyToMessage(null);
                     setConversationMode('group');
                 }
                 break;
-                
-            case 'complete':
+            }
+
+            case 'complete': {
                 setTypingModel(null);
                 setIsLoading(false);
-                
-                // Generate title after first successful message exchange
                 setTimeout(() => generateTitle(), 1000);
                 break;
-                
-            case 'error':
+            }
+
+            case 'error': {
                 setTypingModel(null);
                 setIsLoading(false);
-                setMessages(prev => [...prev, { 
-                    sender: 'system', 
-                    text: `Error: ${data.message}`, 
-                    time: new Date() 
+                setMessages(prev => [...prev, {
+                    sender: 'system',
+                    text: `Error: ${data.message}`,
+                    time: new Date()
                 }]);
                 break;
+            }
         }
     };
 
@@ -341,13 +425,15 @@ function App() {
             // Use fetch with streaming instead of EventSource for POST data
             const response = await fetch(`${BACKEND_URL}/api/chat`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    prompt: promptToSend, 
+                headers: getAuthHeaders(),
+                body: JSON.stringify({
+                    prompt: promptToSend,
                     firstResponder,
                     conversationId: activeConversationId,
                     replyToMessageId: replyToId,
-                    conversationMode: currentMode
+                    conversationMode: currentMode,
+                    characterLimit: characterLimit,
+                    selectedModels: selectedModels
                 })
             });
 
@@ -370,7 +456,7 @@ function App() {
                         try {
                             const data = JSON.parse(line.slice(6));
                             handleStreamEvent(data);
-                        } catch (e) {
+                        } catch {
                             console.warn('Failed to parse SSE data:', line);
                         }
                     }
@@ -390,57 +476,207 @@ function App() {
         }
     };
 
+    // ===== PROMPT MANAGEMENT FUNCTIONS =====
+
+    const loadPrompts = async () => {
+        try {
+            const response = await fetch(`${BACKEND_URL}/api/prompts`, {
+                headers: getAuthHeaders()
+            });
+
+            if (response.ok) {
+                const prompts = await response.json();
+                setUserPrompts(prompts);
+            } else {
+                console.error('Failed to load prompts:', response.status);
+            }
+        } catch (error) {
+            console.error('Error loading prompts:', error);
+        }
+    };
+
+    const savePrompt = async (prompt) => {
+        try {
+            const url = prompt.id
+                ? `${BACKEND_URL}/api/prompts/${prompt.id}`
+                : `${BACKEND_URL}/api/prompts`;
+
+            const method = prompt.id ? 'PUT' : 'POST';
+
+            const response = await fetch(url, {
+                method,
+                headers: getAuthHeaders(),
+                body: JSON.stringify(prompt)
+            });
+
+            if (response.ok) {
+                await loadPrompts(); // Reload prompts
+                setEditingPrompt(null);
+            } else {
+                console.error('Failed to save prompt:', response.status);
+            }
+        } catch (error) {
+            console.error('Error saving prompt:', error);
+        }
+    };
+
+    const deletePrompt = async (promptId) => {
+        if (!confirm('Are you sure you want to delete this prompt?')) {
+            return;
+        }
+
+        try {
+            const response = await fetch(`${BACKEND_URL}/api/prompts/${promptId}`, {
+                method: 'DELETE',
+                headers: getAuthHeaders()
+            });
+
+            if (response.ok) {
+                await loadPrompts(); // Reload prompts
+            } else {
+                console.error('Failed to delete prompt:', response.status);
+            }
+        } catch (error) {
+            console.error('Error deleting prompt:', error);
+        }
+    };
+
+    // Force start in chat view on app load
+    useEffect(() => {
+        setCurrentView('chat');
+    }, []);
+
+    // Load prompts when user changes or view changes to profile
+    useEffect(() => {
+        if (user && currentView === 'profile') {
+            loadPrompts();
+        }
+    }, [user, currentView]);
+
+    const activeConversation = getConversationById(activeConversationId);
+    const activeConversationName = activeConversation?.title || conversationTitle;
+    const activeConversationAvatar = getConversationAvatarUrl(activeConversation);
+    const conversationStatus = conversationMode === 'direct' && replyToMessage
+        ? `Direct with ${replyToMessage?.model || 'Model'}`
+        : 'Online';
+
     return (
-        <div className="page">
-            <div className="main-container">
-                <Sidebar 
-                    conversations={conversations}
-                    activeConversationId={activeConversationId}
-                    onConversationSelect={setActiveConversationId}
-                    onNewConversation={createNewConversation}
-                />
-                <div className="chat">
-                    <div className="chat-container">
-                        <div className="user-bar">
-                            <div className="user-info">
-                                <div className="avatar"><div style={{width:36,height:36,background:'#00a884',borderRadius:'50%',display:'block'}}/></div>
-                                <div className="name">{conversationTitle}<span className="status"> Online</span></div>
-                            </div>
-                            <div className="actions-group">
-                                <div className="actions more">⋮</div>
-                                <div className="actions attachment">📎</div>
-                            </div>
-                        </div>
-                        <div className="conversation">
-                            <div className="conversation-container" ref={chatContainerRef}>
-                                {messages.map((msg, index) => (
-                                    <MessageBubble 
-                                        key={index} 
-                                        msg={msg} 
-                                        onReply={handleReplyToMessage}
+        <div className="chat-shell">
+            <Sidebar
+                conversations={conversations}
+                activeConversationId={activeConversationId}
+                onConversationSelect={setActiveConversationId}
+                onNewConversation={createNewConversation}
+                onProfileClick={() => setCurrentView(currentView === 'profile' ? 'chat' : 'profile')}
+                userProfile={userProfile || user}
+                signOut={signOut}
+                resolveAvatarUrl={getConversationAvatarUrl}
+            />
+
+            <div className="chat-main">
+                <div className="chat-main__layer">
+                    {currentView === 'profile' ? (
+                        <ProfileView
+                            userPrompts={userPrompts}
+                            onSave={savePrompt}
+                            onDelete={deletePrompt}
+                            editingPrompt={editingPrompt}
+                            setEditingPrompt={setEditingPrompt}
+                            user={user}
+                            userProfile={userProfile}
+                            setUserProfile={setUserProfile}
+                            onAvatarUpdate={handleAvatarUpdate}
+                            onBack={() => setCurrentView('chat')}
+                        />
+                    ) : (
+                        <>
+                            <header className="chat-header">
+                                <div className="chat-header__info">
+                                    <ConversationAvatar
+                                        name={activeConversationName}
+                                        imageSrc={activeConversationAvatar}
+                                        fallbackSeed={activeConversationId || activeConversationName}
+                                        className="h-12 w-12"
                                     />
-                                ))}
-                                {isLoading && typingModel && <TypingIndicator model={typingModel} />}
-                            </div>
-                            <div className="conversation-compose">
-                                {replyToMessage && <ReplyPreview message={replyToMessage} onClear={clearReply} />}
-                                <div className="input-row">
-                                    <ModelSelector selected={firstResponder} setSelected={setFirstResponder} disabled={isLoading || conversationMode === 'direct'} />
-                                    <input 
-                                        className="input-msg" 
-                                        type="text" 
-                                        value={input} 
-                                        onChange={e => setInput(e.target.value)} 
-                                        onKeyDown={e => e.key === 'Enter' && handleSend()} 
-                                        placeholder={replyToMessage ? `Replying to ${replyToMessage.model || 'User'}...` : "Type a message"} 
+                                    <div>
+                                        <p className="chat-header__title">{activeConversationName}</p>
+                                        <p className="chat-header__status">{conversationStatus}</p>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <ModelManager
+                                        selectedModels={selectedModels}
+                                        setSelectedModels={setSelectedModels}
+                                        disabled={conversationMode === 'direct' || isLoading}
                                     />
-                                    <button className="send" onClick={handleSend} disabled={isLoading || !input.trim()}>
-                                        <div className="circle"><SendIcon /></div>
-                                    </button>
+                                </div>
+                            </header>
+
+                            <div className="chat-history" ref={chatContainerRef}>
+                                <div className="chat-history__stack">
+                                    {messages.map((msg) => (
+                                        <MessageBubble
+                                            key={msg.id || `${msg.sender}-${msg.time}-${msg.model}`}
+                                            msg={msg}
+                                            onReply={handleReplyToMessage}
+                                        />
+                                    ))}
+                                    {isLoading && typingModel && (
+                                        <TypingIndicator model={typingModel} />
+                                    )}
                                 </div>
                             </div>
-                        </div>
-                    </div>
+
+                            <div className="chat-composer">
+                                <div className="flex-1 space-y-2">
+                                    {replyToMessage && (
+                                        <ReplyPreview
+                                            message={replyToMessage}
+                                            onClear={clearReply}
+                                        />
+                                    )}
+                                    <div className="flex items-start gap-3">
+                                        {conversationMode === 'direct' && (
+                                            <span className="rounded-full bg-whatsapp-accent-soft px-3 py-1 text-xs font-semibold text-whatsapp-ink-soft">
+                                                Direct with {replyToMessage?.model || 'model'}
+                                            </span>
+                                        )}
+                                        <input
+                                            type="text"
+                                            value={input}
+                                            onChange={(e) => setInput(e.target.value)}
+                                            onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+                                            placeholder={replyToMessage ? `Replying to ${replyToMessage.model || 'User'}...` : 'Type a message'}
+                                            className="chat-composer__input"
+                                            disabled={isLoading}
+                                        />
+                                    </div>
+                                </div>
+                                <div className="chat-composer__controls">
+                                    <label className="flex items-center gap-2 text-xs text-whatsapp-ink-soft">
+                                        Limit
+                                        <input
+                                            type="number"
+                                            min="50"
+                                            max="2000"
+                                            value={characterLimit}
+                                            onChange={(e) => setCharacterLimit(parseInt(e.target.value, 10) || 280)}
+                                            className="w-20 rounded-md border border-whatsapp-divider bg-whatsapp-surface px-2 py-1 text-xs text-whatsapp-ink focus:border-whatsapp-accent focus:outline-none"
+                                        />
+                                    </label>
+                                    <Button
+                                        variant="whatsapp-icon"
+                                        size="whatsapp-icon"
+                                        onClick={handleSend}
+                                        disabled={isLoading || !input.trim()}
+                                        className="ml-2"
+                                    >
+                                        <SendIcon />
+                                    </Button>
+                                </div>
+                            </div>
+                        </>
+                    )}
                 </div>
             </div>
         </div>
@@ -461,6 +697,7 @@ const ProviderIcon = ({ modelId, size = 24 }) => {
         if (modelId.startsWith('meta-llama/')) return 'meta';
         if (modelId.startsWith('deepseek/')) return 'deepseek';
         if (modelId.startsWith('qwen/')) return 'qwen';
+        if (modelId.startsWith('moonshotai/')) return 'moonshot';
         return 'default';
     };
 
@@ -512,87 +749,146 @@ const ProviderIcon = ({ modelId, size = 24 }) => {
     );
 };
 
-// Reply preview component (WhatsApp-style)
 const ReplyPreview = ({ message, onClear }) => (
-    <div className="reply-preview">
-        <div className="reply-bar"></div>
-        <div className="reply-content">
-            <div className="reply-header">
-                <span className="reply-sender">{message.model || 'You'}</span>
-                <button className="reply-close" onClick={onClear}>×</button>
+        <div className="chat-reply-preview">
+            <div className="chat-message__reply-bar" />
+            <div className="min-w-0 flex-1 chat-message__reply-text">
+                <p className="text-xs font-semibold text-whatsapp-ink">
+                    {message.model || 'You'}
+                </p>
+                <p className="text-xs text-whatsapp-ink-soft">
+                    {message.text}
+                </p>
             </div>
-            <div className="reply-text">
-                {message.text.length > 50 ? message.text.substring(0, 50) + '...' : message.text}
-            </div>
+            <button
+                type="button"
+                onClick={onClear}
+                className="text-xs font-semibold text-whatsapp-ink-subtle transition hover:text-whatsapp-ink"
+            >
+                Cancel
+            </button>
         </div>
-    </div>
 );
 
-const Sidebar = ({ conversations, activeConversationId, onConversationSelect, onNewConversation }) => (
-    <div className="sidebar">
-        <div className="sidebar-header">
-            <div className="avatar">
-                <img src="/robot.jpg" alt="user avatar" />
+const Sidebar = ({
+    conversations,
+    activeConversationId,
+    onConversationSelect,
+    onNewConversation,
+    onProfileClick,
+    userProfile,
+    signOut,
+    resolveAvatarUrl,
+}) => {
+    const userAvatar = userProfile?.avatar_url
+        ? (userProfile.avatar_url.startsWith('http')
+            ? userProfile.avatar_url
+            : `${BACKEND_URL}${userProfile.avatar_url}`)
+        : null;
+
+    return (
+        <aside className="chat-sidebar">
+            <div className="chat-sidebar__header">
+                <div className="chat-sidebar__profile">
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <button type="button" className="focus:outline-none">
+                                <ConversationAvatar
+                                    name={userProfile?.full_name || userProfile?.email || 'You'}
+                                    imageSrc={userAvatar}
+                                    fallbackSeed={userProfile?.id || userProfile?.email}
+                                />
+                            </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start" className="w-64 rounded-xl border border-whatsapp-divider bg-white p-2 shadow-panel">
+                            <DropdownMenuLabel className="font-normal">
+                                <div className="flex flex-col space-y-1">
+                                    <p className="text-sm font-medium leading-none text-whatsapp-ink">
+                                        {userProfile?.full_name || 'Profile'}
+                                    </p>
+                                    <p className="text-xs text-whatsapp-ink-subtle">Manage your account</p>
+                                </div>
+                            </DropdownMenuLabel>
+                            <DropdownMenuSeparator className="bg-whatsapp-divider" />
+                            <DropdownMenuItem onClick={onProfileClick} className="cursor-pointer text-sm text-whatsapp-ink">
+                                Profile &amp; Settings
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator className="bg-whatsapp-divider" />
+                            <DropdownMenuItem onClick={signOut} className="cursor-pointer text-sm text-red-600 focus:text-red-600">
+                                Sign out
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                    <div>
+                        <p className="chat-sidebar__title">Chats</p>
+                        <p className="chat-sidebar__subtitle">Coordinate multiple models</p>
+                    </div>
+                </div>
+                <div className="chat-sidebar__actions">
+                    <Button
+                        variant="whatsapp-icon"
+                        size="whatsapp-icon"
+                        onClick={onNewConversation}
+                        title="Start new chat"
+                    >
+                        <span className="text-lg leading-none">+</span>
+                    </Button>
+                </div>
             </div>
-            <div className="sidebar-actions">
-                <button 
-                    className="new-chat-btn" 
-                    onClick={onNewConversation}
-                    title="New Chat"
-                >
-                    +
-                </button>
+
+            <div className="chat-sidebar__search">
+                <Input
+                    placeholder="Search or start new chat"
+                    className="h-11 rounded-2xl border border-whatsapp-divider bg-white text-sm text-whatsapp-ink placeholder:text-whatsapp-ink-subtle"
+                />
             </div>
-        </div>
-        <div className="sidebar-search">
-            <input type="text" placeholder="Search or start new chat" />
-        </div>
-        <div className="chat-list">
-            {conversations.map((conversation) => {
-                let lastMessage = "Click to open conversation";
-                if (conversation.last_message) {
-                    const msg = conversation.last_message;
-                    if (msg.sender_type === 'user') {
-                        lastMessage = msg.content.length > 50 ? msg.content.substring(0, 50) + '...' : msg.content;
-                    } else if (msg.sender_type === 'ai' && msg.ai_models) {
-                        const content = msg.content.length > 40 ? msg.content.substring(0, 40) + '...' : msg.content;
-                        lastMessage = `${msg.ai_models.name}: ${content}`;
-                    } else if (msg.sender_type === 'system') {
-                        lastMessage = msg.content.length > 50 ? msg.content.substring(0, 50) + '...' : msg.content;
+
+            <div className="chat-sidebar__list">
+                {conversations.map((conversation) => {
+                    let lastMessage = 'Click to open conversation';
+                    if (conversation.last_message) {
+                        const msg = conversation.last_message;
+                        if (msg.sender_type === 'user') {
+                            lastMessage = msg.content.length > 60 ? `${msg.content.slice(0, 60)}…` : msg.content;
+                        } else if (msg.sender_type === 'ai' && msg.ai_models) {
+                            const content = msg.content.length > 48 ? `${msg.content.slice(0, 48)}…` : msg.content;
+                            lastMessage = `${msg.ai_models.name}: ${content}`;
+                        } else if (msg.sender_type === 'system') {
+                            lastMessage = msg.content.length > 60 ? `${msg.content.slice(0, 60)}…` : msg.content;
+                        }
                     }
-                }
-                
-                return (
-                    <ChatListItem
-                        key={conversation.id}
-                        name={conversation.title || 'New Chat'}
-                        lastMessage={lastMessage}
-                        time={conversation.updated_at ? formatConversationTime(conversation.updated_at) : ''}
-                        avatar="/robot.jpg"
-                        isActive={conversation.id === activeConversationId}
-                        onClick={() => onConversationSelect(conversation.id)}
-                    />
-                );
-            })}
-        </div>
-    </div>
-);
 
-const ChatListItem = ({ name, lastMessage, time, avatar, isActive, onClick }) => (
-    <div 
-        className={`chat-list-item ${isActive ? 'active' : ''}`}
-        onClick={onClick}
-    >
-        <div className="avatar">
-            <img src={avatar} alt="avatar" />
-        </div>
-        <div className="chat-details">
-            <div className="chat-name">{name}</div>
-            <div className="last-message">{lastMessage}</div>
-        </div>
-        <div className="chat-time">{time}</div>
-    </div>
-);
+                    const avatarUrl = resolveAvatarUrl ? resolveAvatarUrl(conversation) : null;
+                    const isActive = conversation.id === activeConversationId;
+
+                    return (
+                        <button
+                            type="button"
+                            key={conversation.id}
+                            onClick={() => onConversationSelect(conversation.id)}
+                            className={cn('chat-sidebar__item', isActive && 'chat-sidebar__item--active')}
+                        >
+                            <ConversationAvatar
+                                name={conversation.title || 'New Chat'}
+                                imageSrc={avatarUrl}
+                                fallbackSeed={conversation.id}
+                                className="chat-sidebar__avatar"
+                            />
+                            <div className="chat-sidebar__meta">
+                                <p className="chat-sidebar__meta-title">{conversation.title || 'New Chat'}</p>
+                                <p className="chat-sidebar__meta-last">{lastMessage}</p>
+                            </div>
+                            <span className="chat-sidebar__time">
+                                {conversation.updated_at ? formatConversationTime(conversation.updated_at) : ''}
+                            </span>
+                        </button>
+                    );
+                })}
+            </div>
+        </aside>
+    );
+};
+
 
 
 const ChatHeader = () => (
@@ -640,83 +936,74 @@ const ChatWindow = ({ messages, isLoading, chatEndRef }) => (
     </main>
 );
 
-// Helper function to get CSS class for AI model
-const getModelColorClass = (modelName) => {
-    const modelMap = {
-        'Gemini': 'model-gemini',
-        'GPT-4o mini': 'model-gpt-4o-mini',
-        'Claude': 'model-claude',
-        'Llama': 'model-llama',
-        'DeepSeek Chat': 'model-deepseek-chat',
-        'Qwen': 'model-qwen'
-    };
-    return modelMap[modelName] || 'model-default';
-};
-
 const MessageBubble = ({ msg, onReply }) => {
-    
     if (msg.sender === 'system') {
         return (
-            <div className="message received" style={{textAlign:'center', maxWidth:'60%', marginLeft:'20%', marginRight:'20%'}}>
+            <div className="chat-message chat-message--system">
                 {msg.text}
-                <span className="metadata"><span className="time">{formatTime(msg.time)}</span></span>
+                <div className="mt-2 text-[11px] text-whatsapp-ink-subtle">{formatTime(msg.time)}</div>
             </div>
         );
     }
 
     const isUser = msg.sender === 'user';
-    const bubbleClasses = isUser ? 'message sent' : 'message received';
-    const modelColorClass = !isUser && msg.model ? getModelColorClass(msg.model) : '';
+    const bubbleClasses = cn(
+        'chat-message',
+        isUser ? 'chat-message--outgoing' : 'chat-message--incoming',
+        msg.isDirectReply && !isUser && 'ring-1 ring-whatsapp-accent/40'
+    );
 
-    const handleReplyClick = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        if (onReply && typeof onReply === 'function') {
-            onReply(msg);
-        }
-    };
+    const providerId = !isUser
+        ? (MODELS.find((m) => m.name === msg.model)?.id || msg.model)
+        : null;
+
+    const truncatedReply = msg.replyTo?.text && msg.replyTo.text.length > 60
+        ? `${msg.replyTo.text.slice(0, 60)}…`
+        : msg.replyTo?.text;
 
     return (
-        <div className={`${bubbleClasses} ${msg.isDirectReply ? 'direct-reply' : ''}`}>
-            {/* Reply context if this message is replying to another */}
-            {msg.replyTo && (
-                <div className="reply-context">
-                    <div className="reply-context-bar"></div>
-                    <div className="reply-context-content">
-                        <span className="reply-context-sender">{msg.replyTo.model || 'You'}</span>
-                        <span className="reply-context-text">
-                            {msg.replyTo.text && msg.replyTo.text.length > 30 ? msg.replyTo.text.substring(0, 30) + '...' : msg.replyTo.text}
-                        </span>
+        <div className={bubbleClasses}>
+            {!isUser && (
+                <div className="chat-message__header">
+                    <ProviderIcon modelId={providerId} size={20} />
+                    <span className="font-semibold text-whatsapp-ink">{msg.model}</span>
+                    {msg.isDirectReply && (
+                        <span className="text-[11px] font-medium text-whatsapp-ink-soft">• Direct reply</span>
+                    )}
+                </div>
+            )}
+
+            {msg.replyTo && msg.isDirectReply && (
+                <div className="chat-message__reply">
+                    <div className="chat-message__reply-bar" />
+                    <div className="min-w-0">
+                        <p className="text-[11px] font-semibold text-whatsapp-ink">
+                            {msg.replyTo.model || 'You'}
+                        </p>
+                        <p className="truncate text-[11px] text-whatsapp-ink-subtle">
+                            {truncatedReply}
+                        </p>
                     </div>
                 </div>
             )}
-            
-            {/* Message header with icon and model name for AI messages */}
-            {!isUser && (
-                <div className="message-header">
-                    <ProviderIcon modelId={MODELS.find(m => m.name === msg.model)?.id || msg.model} size={20} />
-                    <strong className={`${modelColorClass}`} style={{fontSize:12,marginLeft:6,fontWeight:600}}>
-                        {msg.model}
-                        {msg.isDirectReply && <span className="direct-indicator"> • Direct reply</span>}
-                    </strong>
-                </div>
-            )}
-            
-            {/* Message content */}
-            <div className="message-content">
+
+            <div className="space-y-2 whitespace-pre-line text-[0.95rem] leading-relaxed">
                 {msg.text}
             </div>
-            
-            {/* Message metadata and actions */}
-            <div className="message-footer">
-                <span className="metadata">
-                    <span className="time">{formatTime(msg.time)}</span>
-                </span>
+
+            <div className="chat-message__meta">
+                <span>{formatTime(msg.time)}</span>
                 {!isUser && (
-                    <button 
-                        className="reply-button" 
-                        onClick={handleReplyClick} 
-                        title="Reply to this message"
+                    <button
+                        type="button"
+                        className="text-xs font-medium text-whatsapp-ink-soft transition hover:text-whatsapp-ink"
+                        onClick={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            if (onReply) {
+                                onReply(msg);
+                            }
+                        }}
                     >
                         Reply
                     </button>
@@ -726,62 +1013,19 @@ const MessageBubble = ({ msg, onReply }) => {
     );
 };
 
-const MessageInput = ({ input, setInput, onSend, isLoading, firstResponder, setFirstResponder }) => (
-    <footer className="px-3 py-2 bg-[#202c33]">
-        <div className="flex items-center gap-2 max-w-3xl mx-auto">
-            <ModelSelector selected={firstResponder} setSelected={setFirstResponder} disabled={isLoading} />
-            <button className="p-2 rounded-full text-gray-300 hover:bg-white/10" title="Emoji">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5"><path d="M12 2a10 10 0 100 20 10 10 0 000-20zm-3 7a1.5 1.5 0 110 3 1.5 1.5 0 010-3zm6 0a1.5 1.5 0 110 3 1.5 1.5 0 010-3zM12 18a5.5 5.5 0 01-5-3h10a5.5 5.5 0 01-5 3z"/></svg>
-            </button>
-            <div className="flex-1">
-                <input
-                    type="text"
-                    value={input}
-                    onChange={e => setInput(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && onSend()}
-                    disabled={isLoading}
-                    className="w-full py-3 px-4 bg-[#2a3942] text-[#e9edef] rounded-lg focus:outline-none placeholder:text-gray-400"
-                    placeholder="Type a message"
-                />
-            </div>
-            <button
-                onClick={onSend}
-                disabled={isLoading || !input.trim()}
-                className={`w-10 h-10 rounded-full flex items-center justify-center ${input.trim() ? 'bg-[#00a884] text-white hover:brightness-110' : 'bg-[#2a3942] text-gray-300'} disabled:opacity-50`}
-                title="Send"
-            >
-                <SendIcon />
-            </button>
-        </div>
-    </footer>
-);
-
-const ModelSelector = ({ selected, setSelected, disabled }) => (
-    <select
-        value={selected}
-        onChange={e => setSelected(e.target.value)}
-        disabled={disabled}
-        className="py-2.5 px-3 border-none rounded-lg bg-[#2a3942] text-[#e9edef] focus:outline-none cursor-pointer disabled:opacity-50"
-    >
-        {MODELS.map(model => (
-            <option key={model.id} value={model.id}>{model.name}</option>
-        ))}
-    </select>
-);
-
 const TypingIndicator = ({ model }) => (
-    <div className="message received">
-        <strong className={getModelColorClass(model?.model)} style={{display:'block',fontSize:12,marginBottom:4,fontWeight:600}}>
-            {model?.model} is typing...
-        </strong>
-        <div className="flex items-center space-x-1">
-            <span className="w-2 h-2 bg-gray-400 rounded-full animate-pulse"/>
-            <span className="w-2 h-2 bg-gray-400 rounded-full animate-pulse"/>
-            <span className="w-2 h-2 bg-gray-400 rounded-full animate-pulse"/>
+    <div className="chat-message chat-message--incoming">
+        <div className="chat-message__header">
+            <span className="font-semibold text-whatsapp-ink">{model?.model}</span>
+            <span className="text-whatsapp-ink-soft">is typing…</span>
         </div>
-        <span className="metadata">
-            <span className="time">{formatTime(new Date())}</span>
-        </span>
+        <div className="chat-typing-indicator">
+            <div className="chat-typing-indicator__dots">
+                <span />
+                <span />
+                <span />
+            </div>
+        </div>
     </div>
 );
 
@@ -790,6 +1034,238 @@ const SendIcon = () => (
         <path d="M3.478 2.405a.75.75 0 00-.926.94l2.432 7.905H13.5a.75.75 0 010 1.5H4.984l-2.432 7.905a.75.75 0 00.926.94 60.519 60.519 0 0018.445-8.986.75.75 0 000-1.218A60.517 60.517 0 003.478 2.405z" />
     </svg>
 );
+
+// ===== PROFILE VIEW COMPONENT =====
+const ProfileView = ({ userPrompts, onSave, onDelete, editingPrompt, setEditingPrompt, user, userProfile, setUserProfile, onAvatarUpdate, onBack }) => {
+    const promptTypes = [
+        { key: 'base-system', label: 'Base System Prompt', description: 'Primary guidance for the first responder model in group chats.' },
+        { key: 'uniqueness', label: 'Uniqueness Prompt', description: 'Coaches following models to add entirely new angles.' },
+        { key: 'thread-context', label: 'Thread Context Prompt', description: 'Keeps long-running discussions coherent.' },
+        { key: 'direct-conversation', label: 'Direct Conversation Prompt', description: 'Shapes one-on-one conversations when replying directly to a model.' },
+    ];
+
+    const getPromptsForType = (type) => userPrompts.filter((p) => p.prompt_type === type);
+
+    const getDefaultPromptForType = (type) => {
+        const systemDefaults = {
+            'base-system': `You are one of several AI assistants in a coordinated group chat. Reply concisely with high signal. Avoid filler and restating the question. Prefer practical guidance with a warm tone.
+
+Constraints:
+- Max length: {{MAX_CHARS}} characters
+- Response must be plain text only
+- If unsure, say so briefly and offer one concrete next step`,
+            'uniqueness': `You are an AI assistant in a group chat. Provide a fresh perspective beyond what previous assistants covered.
+
+Rules:
+- Do not repeat core ideas or examples already given.
+- Add a new angle, trade-off, or tactic.
+- Stay within {{MAX_CHARS}} characters and use plain text only.
+
+Context:
+- Original user question: "{{USER_PROMPT}}"
+- Previous assistant answers:
+{{PRIOR_ANSWERS}}`,
+            'thread-context': `You are continuing an ongoing thread. Keep your reply concise, contextual, and additive.
+
+Context:
+{{CONVERSATION_HISTORY}}
+
+Constraints:
+- Max length: {{MAX_CHARS}} characters
+- Plain text only
+- Reference prior context when it sharpens your guidance`,
+            'direct-conversation': `You are in a direct 1-on-1 conversation with the user. Offer focused, personal guidance.
+
+Constraints:
+- Max length: {{MAX_CHARS}} characters
+- Plain text only
+- Maintain a conversational tone`,
+        };
+        return systemDefaults[type] || '';
+    };
+
+    return (
+        <div className="profile-panel">
+            <div className="profile-panel__header">
+                <div className="flex items-center gap-3">
+                    <Button
+                        variant="whatsapp-secondary"
+                        size="sm"
+                        onClick={onBack}
+                        className="rounded-full px-3"
+                    >
+                        ← Back
+                    </Button>
+                    <div>
+                        <h2 className="text-xl font-semibold text-whatsapp-ink">Profile &amp; Settings</h2>
+                        <p className="text-sm text-whatsapp-ink-soft">{user?.email}</p>
+                    </div>
+                </div>
+            </div>
+
+            <section className="profile-panel__section space-y-6">
+                <div className="space-y-1">
+                    <h3 className="text-lg font-semibold text-whatsapp-ink">Profile identity</h3>
+                    <p className="text-sm text-whatsapp-ink-soft">Update how you show up across conversations.</p>
+                </div>
+
+                <div className="flex flex-col items-center gap-6">
+                    <ProfilePictureUpload user={userProfile || user} onAvatarUpdate={onAvatarUpdate} />
+                    <div className="w-full rounded-2xl border border-whatsapp-divider bg-whatsapp-surface p-5 text-sm text-whatsapp-ink shadow-sm">
+                        <div className="space-y-2">
+                            <p className="font-medium">Email</p>
+                            <p className="text-whatsapp-ink-soft">{user?.email}</p>
+                        </div>
+                        <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
+                            <p className="font-medium">Display name</p>
+                            <EditableDisplayName
+                                displayName={userProfile?.display_name}
+                                onDisplayNameUpdate={(newDisplayName) => {
+                                    setUserProfile((prev) => ({
+                                        ...prev,
+                                        display_name: newDisplayName,
+                                    }));
+                                }}
+                                className="flex-1"
+                            />
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section className="profile-panel__section space-y-6">
+                <div className="space-y-1">
+                    <h3 className="text-lg font-semibold text-whatsapp-ink">Custom AI prompts</h3>
+                    <p className="text-sm text-whatsapp-ink-soft">Override the stock instructions each model receives so the chat behaves exactly how you need.</p>
+                </div>
+
+                <div className="space-y-4">
+                    {promptTypes.map((type) => {
+                        const typePrompts = getPromptsForType(type.key);
+                        const activePrompt = typePrompts.find((p) => p.is_active && p.is_default);
+
+                        return (
+                            <div key={type.key} className="rounded-2xl border border-whatsapp-divider bg-whatsapp-surface p-5 shadow-sm">
+                                <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                                    <div className="space-y-2">
+                                        <h4 className="text-base font-semibold text-whatsapp-ink">{type.label}</h4>
+                                        <p className="max-w-xl text-sm text-whatsapp-ink-soft">{type.description}</p>
+                                    </div>
+                                    <Button
+                                        variant="whatsapp"
+                                        size="sm"
+                                        onClick={() => setEditingPrompt({
+                                            prompt_type: type.key,
+                                            title: `My ${type.label}`,
+                                            content: '',
+                                            is_default: true,
+                                        })}
+                                        className="self-start whitespace-nowrap"
+                                    >
+                                        + Add custom
+                                    </Button>
+                                </div>
+
+                                {activePrompt ? (
+                                    <div className="mt-4 space-y-3 rounded-xl border border-whatsapp-divider bg-white/60 p-4">
+                                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                            <p className="text-sm font-semibold text-whatsapp-accent-dark">{activePrompt.title}</p>
+                                            <div className="flex items-center gap-2">
+                                                <Button
+                                                    size="sm"
+                                                    variant="whatsapp-secondary"
+                                                    onClick={() => setEditingPrompt(activePrompt)}
+                                                >
+                                                    Edit
+                                                </Button>
+                                                {activePrompt.user_id !== '00000000-0000-0000-0000-000000000001' && (
+                                                    <Button
+                                                        size="sm"
+                                                        variant="destructive"
+                                                        onClick={() => onDelete(activePrompt.id)}
+                                                    >
+                                                        Delete
+                                                    </Button>
+                                                )}
+                                            </div>
+                                        </div>
+                                        <pre className="max-h-64 overflow-auto rounded-lg bg-whatsapp-surface px-4 py-3 text-sm leading-relaxed text-whatsapp-ink whitespace-pre-wrap">
+                                            {activePrompt.content || getDefaultPromptForType(type.key)}
+                                        </pre>
+                                    </div>
+                                ) : (
+                                    <div className="mt-4 space-y-3 rounded-xl border border-dashed border-whatsapp-divider bg-white/40 p-4 text-sm text-whatsapp-ink-soft">
+                                        <p className="font-medium">Using workspace default prompt:</p>
+                                        <pre className="max-h-64 overflow-auto rounded-lg bg-whatsapp-surface px-4 py-3 text-sm leading-relaxed text-whatsapp-ink whitespace-pre-wrap">
+                                            {getDefaultPromptForType(type.key)}
+                                        </pre>
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })}
+                </div>
+            </section>
+
+            {editingPrompt && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
+                    <div className="w-full max-w-xl space-y-5 rounded-2xl border border-whatsapp-divider bg-whatsapp-panel p-6 shadow-panel">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <h3 className="text-lg font-semibold text-whatsapp-ink">
+                                    {editingPrompt.id ? 'Edit prompt' : 'Create custom prompt'}
+                                </h3>
+                                <p className="mt-1 text-xs text-whatsapp-ink-soft">{promptTypes.find((p) => p.key === editingPrompt.prompt_type)?.label}</p>
+                            </div>
+                            <Button variant="ghost" onClick={() => setEditingPrompt(null)} className="text-sm text-whatsapp-ink-soft">
+                                Close
+                            </Button>
+                        </div>
+
+                        <div className="space-y-3">
+                            <div className="space-y-1">
+                                <label className="text-xs font-semibold uppercase tracking-wide text-whatsapp-ink-soft">Title</label>
+                                <input
+                                    type="text"
+                                    value={editingPrompt.title}
+                                    onChange={(e) => setEditingPrompt({ ...editingPrompt, title: e.target.value })}
+                                    className="w-full rounded-lg border border-whatsapp-divider bg-whatsapp-surface px-3 py-2 text-sm text-whatsapp-ink focus:border-whatsapp-accent focus:outline-none"
+                                />
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-xs font-semibold uppercase tracking-wide text-whatsapp-ink-soft">Content</label>
+                                <textarea
+                                    value={editingPrompt.content}
+                                    onChange={(e) => setEditingPrompt({ ...editingPrompt, content: e.target.value })}
+                                    rows={10}
+                                    className="w-full resize-y rounded-lg border border-whatsapp-divider bg-whatsapp-surface px-3 py-2 text-sm leading-relaxed text-whatsapp-ink focus:border-whatsapp-accent focus:outline-none"
+                                    placeholder="Enter your custom prompt..."
+                                />
+                            </div>
+                        </div>
+
+                        <div className="flex items-center justify-end gap-2">
+                            <Button
+                                variant="whatsapp-secondary"
+                                onClick={() => setEditingPrompt(null)}
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                variant="whatsapp"
+                                onClick={() => onSave(editingPrompt)}
+                                disabled={!editingPrompt.title || !editingPrompt.content}
+                                className="disabled:opacity-50"
+                            >
+                                Save prompt
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
 
 export default App;
 
