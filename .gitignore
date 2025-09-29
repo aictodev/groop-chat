@@ -67,3 +67,12 @@ jspm_packages/
 # temporary folders
 tmp/
 temp/
+
+# Local logs and scratch assets
+CLAUDE.md
+GEMINI.md
+.playwright-mcp/
+supabase/
+backend/uploads/
+frontend/public/robot.jpg
+frontend/public/robot.jpg.backup
