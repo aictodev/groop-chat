@@ -29,6 +29,17 @@ const MODELS = [
   { id: "moonshotai/kimi-k2", name: "Kimi K2" },
 ];
 
+const BADGE_SIZES = {
+  sm: {
+    dimensions: 'h-5 w-5',
+    text: 'text-[10px]',
+  },
+  md: {
+    dimensions: 'h-6 w-6',
+    text: 'text-[11px]',
+  },
+};
+
 const ModelManager = ({ selectedModels, setSelectedModels, disabled }) => {
   const [draggedIndex, setDraggedIndex] = useState(null);
 
@@ -75,30 +86,41 @@ const ModelManager = ({ selectedModels, setSelectedModels, disabled }) => {
     };
   };
 
-  const renderModelBadge = (modelId) => {
+  const renderModelBadge = (modelId, size = 'sm') => {
     const { icon, name, provider } = getModelConfig(modelId);
     const initial = name.charAt(0).toUpperCase();
+    const sizeConfig = BADGE_SIZES[size] || BADGE_SIZES.sm;
+    const { dimensions, text } = sizeConfig;
 
     return (
-      <div className="relative flex h-5 w-5 items-center justify-center">
+      <div
+        className={`relative flex items-center justify-center ${dimensions}`}
+      >
         {icon ? (
           <>
             <img
               src={icon}
               alt={`${provider || name} logo`}
-              className="h-5 w-5 rounded-full border border-white/60 bg-white object-contain shadow-sm"
+              className={`${dimensions} rounded-full border border-white/60 bg-white object-contain shadow-sm`}
               onError={(event) => {
                 event.currentTarget.style.display = 'none';
                 const fallback = event.currentTarget.nextElementSibling;
-                if (fallback) fallback.classList.remove('hidden');
+                if (fallback) {
+                  fallback.classList.remove('hidden');
+                  fallback.classList.add('flex');
+                }
               }}
             />
-            <div className="hidden h-5 w-5 items-center justify-center rounded-full bg-whatsapp-accent-soft text-[10px] font-semibold text-whatsapp-ink">
+            <div
+              className={`hidden ${dimensions} items-center justify-center rounded-full bg-whatsapp-accent-soft ${text} font-semibold text-whatsapp-ink`}
+            >
               {initial}
             </div>
           </>
         ) : (
-          <div className="flex h-5 w-5 items-center justify-center rounded-full bg-whatsapp-accent-soft text-[10px] font-semibold text-whatsapp-ink">
+          <div
+            className={`flex ${dimensions} items-center justify-center rounded-full bg-whatsapp-accent-soft ${text} font-semibold text-whatsapp-ink`}
+          >
             {initial}
           </div>
         )}
@@ -115,8 +137,13 @@ const ModelManager = ({ selectedModels, setSelectedModels, disabled }) => {
           disabled={disabled}
           className="h-10 rounded-bubble px-3 shadow-none"
         >
+          {selectedModels.length > 0 && (
+            <div className="flex items-center justify-center">
+              {renderModelBadge(selectedModels[0], 'md')}
+            </div>
+          )}
           <Menu className="h-4 w-4" />
-          <span className="ml-2 text-sm font-semibold text-whatsapp-ink-soft">
+          <span className="text-sm font-semibold text-whatsapp-ink-soft">
             {selectedModels.length}
           </span>
         </Button>

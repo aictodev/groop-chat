@@ -29,6 +29,73 @@ const MODELS = [
 ];
 const BACKEND_URL = 'http://localhost:7001';
 
+const createAliasKey = (value) => value.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+const buildModelAliases = (model) => {
+    const variants = new Set();
+    variants.add(model.name);
+    variants.add(model.name.replace(/\s+/g, ''));
+
+    const nameParts = model.name.split(/\s+/);
+    if (nameParts.length > 0) {
+        variants.add(nameParts[0]);
+    }
+    if (nameParts.length > 1) {
+        variants.add(nameParts[0] + nameParts[1]);
+    }
+
+    const slug = model.id.split('/').pop();
+    variants.add(slug);
+    variants.add(slug.replace(/-/g, ''));
+
+    return Array.from(variants).filter(Boolean);
+};
+
+const MODEL_ALIAS_METADATA = MODELS.map((model) => ({
+    ...model,
+    aliases: buildModelAliases(model),
+}));
+
+const MODEL_LOOKUP = MODEL_ALIAS_METADATA.reduce((acc, model) => {
+    acc[model.id] = model;
+    return acc;
+}, {});
+
+const MODEL_ALIAS_INDEX = MODEL_ALIAS_METADATA.reduce((acc, model) => {
+    model.aliases.forEach((variant) => {
+        const key = createAliasKey(variant);
+        if (key && !acc[key]) {
+            acc[key] = model.id;
+        }
+    });
+    return acc;
+}, {});
+
+const MENTION_REGEX = /@([a-zA-Z0-9][a-zA-Z0-9-_]*)/g;
+
+const findMentionedModel = (text) => {
+    if (!text) {
+        return null;
+    }
+
+    const matches = text.matchAll(MENTION_REGEX);
+    for (const match of matches) {
+        const aliasKey = createAliasKey(match[1]);
+        if (!aliasKey) continue;
+
+        const modelId = MODEL_ALIAS_INDEX[aliasKey];
+        if (modelId) {
+            return {
+                id: modelId,
+                name: MODEL_LOOKUP[modelId]?.name || modelId,
+                mentionToken: match[0],
+            };
+        }
+    }
+
+    return null;
+};
+
 // --- Main App Component ---
 function App() {
     const { user, signOut, session } = useAuth();
@@ -47,8 +114,14 @@ function App() {
     const [editingPrompt, setEditingPrompt] = useState(null);
     const [characterLimit, setCharacterLimit] = useState(280);
     const [selectedModels, setSelectedModels] = useState(MODELS.map(m => m.id));
+    const [mentionTarget, setMentionTarget] = useState(null);
+    const [mentionSuggestions, setMentionSuggestions] = useState([]);
+    const [isMentionMenuOpen, setIsMentionMenuOpen] = useState(false);
+    const [activeMentionRange, setActiveMentionRange] = useState(null);
+    const [mentionSelectionIndex, setMentionSelectionIndex] = useState(0);
     const [userProfile, setUserProfile] = useState(null);
     const chatContainerRef = useRef(null);
+    const composerInputRef = useRef(null);
 
     const getConversationById = (conversationId) => {
         if (!conversationId) {
@@ -106,6 +179,12 @@ function App() {
             chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
         }
     }, [messages]);
+
+    useEffect(() => {
+        if (conversationMode === 'direct') {
+            setMentionTarget(null);
+        }
+    }, [conversationMode]);
 
 
     const loadUserProfile = async () => {
@@ -395,14 +474,123 @@ function App() {
         }
     };
 
+    const resetMentionState = () => {
+        setMentionSuggestions([]);
+        setIsMentionMenuOpen(false);
+        setActiveMentionRange(null);
+        setMentionSelectionIndex(0);
+    };
+
+    const handleInputChange = (event) => {
+        const value = event.target.value;
+        const caretPosition = event.target.selectionStart ?? value.length;
+
+        setInput(value);
+
+        if (conversationMode === 'direct') {
+            setMentionTarget(null);
+            resetMentionState();
+            return;
+        }
+
+        const textBeforeCaret = value.slice(0, caretPosition);
+        const mentionMatch = textBeforeCaret.match(/@([a-zA-Z0-9-_]*)$/);
+
+        if (mentionMatch) {
+            const query = mentionMatch[1];
+            const mentionStart = textBeforeCaret.lastIndexOf('@');
+            const aliasKey = createAliasKey(query);
+
+            const availableModels = MODEL_ALIAS_METADATA.filter((meta) => selectedModels.includes(meta.id));
+            const filtered = availableModels.filter((meta) => {
+                if (!aliasKey) return true;
+                return meta.aliases.some((alias) => createAliasKey(alias).startsWith(aliasKey));
+            });
+
+            if (filtered.length > 0) {
+                setMentionSuggestions(filtered);
+                setIsMentionMenuOpen(true);
+                setActiveMentionRange({ start: mentionStart, end: caretPosition });
+                setMentionSelectionIndex((prev) => Math.min(prev, filtered.length - 1));
+            } else {
+                resetMentionState();
+            }
+        } else {
+            resetMentionState();
+        }
+
+        const mention = findMentionedModel(value);
+        setMentionTarget(mention);
+    };
+
+    const applyMentionSelection = (modelMeta) => {
+        if (!activeMentionRange) return;
+
+        const { start, end } = activeMentionRange;
+        const before = input.slice(0, start);
+        const after = input.slice(end);
+        const mentionLabel = modelMeta.name.split(/\s+/)[0];
+        const replacement = `@${mentionLabel} `;
+        const nextValue = `${before}${replacement}${after}`;
+
+        setInput(nextValue);
+        setMentionTarget({ id: modelMeta.id, name: modelMeta.name, mentionToken: replacement.trim() });
+        resetMentionState();
+
+        requestAnimationFrame(() => {
+            const inputEl = composerInputRef.current;
+            if (inputEl) {
+                const caret = before.length + replacement.length;
+                inputEl.setSelectionRange(caret, caret);
+                inputEl.focus();
+            }
+        });
+    };
+
+    const handleInputKeyDown = (event) => {
+        if (isMentionMenuOpen && mentionSuggestions.length > 0) {
+            if (event.key === 'ArrowDown') {
+                event.preventDefault();
+                setMentionSelectionIndex((prev) => (prev + 1) % mentionSuggestions.length);
+                return;
+            }
+            if (event.key === 'ArrowUp') {
+                event.preventDefault();
+                setMentionSelectionIndex((prev) => (prev - 1 + mentionSuggestions.length) % mentionSuggestions.length);
+                return;
+            }
+            if (event.key === 'Enter' || event.key === 'Tab') {
+                event.preventDefault();
+                applyMentionSelection(mentionSuggestions[mentionSelectionIndex] || mentionSuggestions[0]);
+                return;
+            }
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                resetMentionState();
+                return;
+            }
+        }
+
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            handleSend();
+        }
+    };
+
     const handleSend = async () => {
         if (!input.trim() || isLoading) return;
 
         const promptToSend = input;
         const replyToId = replyToMessage?.id;
-        const currentMode = conversationMode;
+        const mentionOverride = conversationMode === 'direct' ? null : findMentionedModel(promptToSend);
+        const currentMode = mentionOverride ? 'group' : conversationMode;
+        const modelsForRequest = mentionOverride
+            ? [mentionOverride.id]
+            : selectedModels;
         
         setInput('');
+        setMentionTarget(null);
+        resetMentionState();
         setIsLoading(true);
         setTypingModel(null);
 
@@ -433,7 +621,7 @@ function App() {
                     replyToMessageId: replyToId,
                     conversationMode: currentMode,
                     characterLimit: characterLimit,
-                    selectedModels: selectedModels
+                    selectedModels: modelsForRequest
                 })
             });
 
@@ -641,38 +829,67 @@ function App() {
                                                 Direct with {replyToMessage?.model || 'model'}
                                             </span>
                                         )}
-                                        <input
-                                            type="text"
-                                            value={input}
-                                            onChange={(e) => setInput(e.target.value)}
-                                            onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-                                            placeholder={replyToMessage ? `Replying to ${replyToMessage.model || 'User'}...` : 'Type a message'}
-                                            className="chat-composer__input"
-                                            disabled={isLoading}
-                                        />
+                                        {conversationMode !== 'direct' && mentionTarget && (
+                                            <span className="rounded-full bg-whatsapp-accent-soft px-3 py-1 text-xs font-semibold text-whatsapp-ink-soft">
+                                                Direct call: {mentionTarget.name}
+                                            </span>
+                                        )}
+                                        <div className="relative w-full">
+                                            <input
+                                                type="text"
+                                                value={input}
+                                                ref={composerInputRef}
+                                                onChange={handleInputChange}
+                                                onKeyDown={handleInputKeyDown}
+                                                placeholder={replyToMessage ? `Replying to ${replyToMessage.model || 'User'}...` : 'Type a message'}
+                                                className="chat-composer__input"
+                                                disabled={isLoading}
+                                            />
+                                            <div className="chat-composer__input-controls">
+                                                <label className="flex items-center gap-2 text-xs text-whatsapp-ink-soft">
+                                                    Limit
+                                                    <input
+                                                        type="number"
+                                                        min="50"
+                                                        max="2000"
+                                                        value={characterLimit}
+                                                        onChange={(e) => setCharacterLimit(parseInt(e.target.value, 10) || 280)}
+                                                        className="w-20 rounded-md border border-whatsapp-divider bg-white/90 px-2 py-1 text-xs text-whatsapp-ink focus:border-whatsapp-accent focus:outline-none"
+                                                    />
+                                                </label>
+                                                <Button
+                                                    variant="whatsapp-icon"
+                                                    size="whatsapp-icon"
+                                                    onClick={handleSend}
+                                                    disabled={isLoading || !input.trim()}
+                                                >
+                                                    <SendIcon />
+                                                </Button>
+                                            </div>
+                                            {isMentionMenuOpen && mentionSuggestions.length > 0 && (
+                                                <div className="absolute bottom-[calc(100%+0.5rem)] left-0 z-20 max-h-60 w-full overflow-y-auto rounded-2xl border border-whatsapp-divider bg-white shadow-panel">
+                                                    {mentionSuggestions.map((model, index) => {
+                                                        const isActive = index === mentionSelectionIndex;
+                                                        return (
+                                                            <button
+                                                                type="button"
+                                                                key={model.id}
+                                                                onMouseDown={(event) => {
+                                                                    event.preventDefault();
+                                                                    applyMentionSelection(model);
+                                                                }}
+                                                                className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition ${isActive ? 'bg-whatsapp-panel-muted text-whatsapp-ink' : 'text-whatsapp-ink-soft hover:bg-whatsapp-panel-muted hover:text-whatsapp-ink'}`}
+                                                            >
+                                                                <ProviderIcon modelId={model.id} size={18} />
+                                                                <span className="font-medium">{model.name}</span>
+                                                                <span className="ml-auto text-xs text-whatsapp-ink-subtle">@{model.name.split(/\s+/)[0]}</span>
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
-                                </div>
-                                <div className="chat-composer__controls">
-                                    <label className="flex items-center gap-2 text-xs text-whatsapp-ink-soft">
-                                        Limit
-                                        <input
-                                            type="number"
-                                            min="50"
-                                            max="2000"
-                                            value={characterLimit}
-                                            onChange={(e) => setCharacterLimit(parseInt(e.target.value, 10) || 280)}
-                                            className="w-20 rounded-md border border-whatsapp-divider bg-whatsapp-surface px-2 py-1 text-xs text-whatsapp-ink focus:border-whatsapp-accent focus:outline-none"
-                                        />
-                                    </label>
-                                    <Button
-                                        variant="whatsapp-icon"
-                                        size="whatsapp-icon"
-                                        onClick={handleSend}
-                                        disabled={isLoading || !input.trim()}
-                                        className="ml-2"
-                                    >
-                                        <SendIcon />
-                                    </Button>
                                 </div>
                             </div>
                         </>
