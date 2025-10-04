@@ -27,7 +27,7 @@ const MODELS = [
     { id: "qwen/qwen-2.5-7b-instruct", name: "Qwen" },
     { id: "moonshotai/kimi-k2", name: "Kimi K2" },
 ];
-const BACKEND_URL = 'http://localhost:7001';
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:7001';
 
 const createAliasKey = (value) => value.toLowerCase().replace(/[^a-z0-9]/g, '');
 
