@@ -4,6 +4,7 @@ import { useAuth } from './AuthContext';
 import ModelManager from './components/ModelManager';
 import ProfilePictureUpload from './components/ProfilePictureUpload';
 import EditableDisplayName from './components/EditableDisplayName';
+import Landing from './components/Landing';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -14,6 +15,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { MoreVertical, Menu, X } from 'lucide-react';
 import { ConversationAvatar } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 
@@ -98,7 +100,7 @@ const findMentionedModel = (text) => {
 
 // --- Main App Component ---
 function App() {
-    const { user, signOut, session } = useAuth();
+    const { user, signOut, session, loading, signInWithGoogle, signInWithEmail, signUp } = useAuth();
     const [messages, setMessages] = useState([]);
     const [input, setInput] = useState('');
     const [firstResponder] = useState(MODELS[0].id);
@@ -120,6 +122,7 @@ function App() {
     const [activeMentionRange, setActiveMentionRange] = useState(null);
     const [mentionSelectionIndex, setMentionSelectionIndex] = useState(0);
     const [userProfile, setUserProfile] = useState(null);
+    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const chatContainerRef = useRef(null);
     const composerInputRef = useRef(null);
 
@@ -156,22 +159,28 @@ function App() {
 
     // Load existing messages on component mount
     useEffect(() => {
+        if (loading || !user) {
+            return;
+        }
+
         const initializeApp = async () => {
             await loadConversations();
             await loadMessages();
-            if (user) {
-                await loadUserProfile();
-            }
+            await loadUserProfile();
         };
         initializeApp();
-    }, [user]);
+    }, [user, loading]);
 
     // Load messages when active conversation changes
     useEffect(() => {
+        if (loading || !user) {
+            return;
+        }
+
         if (activeConversationId && conversations.length > 0) {
             loadMessages();
         }
-    }, [activeConversationId, conversations]);
+    }, [activeConversationId, conversations, user, loading]);
 
     // Auto-scroll to the latest message
     useEffect(() => {
@@ -185,6 +194,51 @@ function App() {
             setMentionTarget(null);
         }
     }, [conversationMode]);
+
+    useEffect(() => {
+        setCurrentView('chat');
+    }, []);
+
+    useEffect(() => {
+        const handleResize = () => {
+            if (window.innerWidth >= 1024) {
+                setIsSidebarOpen(false);
+            }
+        };
+
+        handleResize();
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
+
+    useEffect(() => {
+        if (!user || loading) {
+            return;
+        }
+        if (currentView === 'profile') {
+            loadPrompts();
+        }
+    }, [user, currentView, loading]);
+
+    if (loading) {
+        return (
+            <div className="flex min-h-screen items-center justify-center bg-black text-white">
+                <span className="animate-pulse text-xs uppercase tracking-[0.5em] text-neutral-500">
+                    Loading
+                </span>
+            </div>
+        );
+    }
+
+    if (!user) {
+        return (
+            <Landing
+                onGoogleSignIn={signInWithGoogle}
+                onEmailSignIn={signInWithEmail}
+                onEmailSignUp={signUp}
+            />
+        );
+    }
 
 
     const loadUserProfile = async () => {
@@ -228,141 +282,179 @@ function App() {
     };
 
     const loadMessages = async () => {
-        try {
-            const url = activeConversationId 
-                ? `${BACKEND_URL}/api/conversations/${activeConversationId}/messages`
-                : `${BACKEND_URL}/api/messages`;
-            
-            console.log('Loading messages from:', url);
-            
-            const response = await fetch(url, {
-                headers: getAuthHeaders()
+        const url = activeConversationId
+            ? `${BACKEND_URL}/api/conversations/${activeConversationId}/messages`
+            : `${BACKEND_URL}/api/messages`;
+
+        console.log('Loading messages from:', url);
+
+        const response = await fetch(url, {
+            headers: getAuthHeaders()
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Failed to load messages:', response.status, errorText);
+            const systemMessage = response.status === 403
+                ? 'You do not have access to this conversation yet.'
+                : 'We could not load messages for this conversation. Please try again.';
+            setMessages([
+                { id: 'load-error', sender: 'system', text: systemMessage, time: new Date() }
+            ]);
+            return;
+        }
+
+        const normalizeMessages = (rawMessages) => {
+            const processedMessages = rawMessages.map(msg => {
+                const processed = {
+                    ...msg,
+                    id: msg.id || `temp_${Date.now()}_${Math.random()}`,
+                    sender: msg.sender_type || msg.sender,
+                    text: msg.content || msg.text,
+                    time: new Date(msg.created_at || msg.time),
+                    model: msg.ai_models?.name || msg.model
+                };
+
+                if (msg.metadata) {
+                    try {
+                        const metadata = typeof msg.metadata === 'string' ? JSON.parse(msg.metadata) : msg.metadata;
+                        console.log('📖 Processing message metadata for msg', msg.id, ':', metadata);
+                        if (metadata.reply_to_message_id) {
+                            processed.replyToMessageId = metadata.reply_to_message_id;
+                            console.log('🔗 Found reply relationship:', processed.replyToMessageId);
+                        }
+                        if (metadata.conversation_mode === 'direct' || metadata.is_direct_reply) {
+                            processed.isDirectReply = true;
+                            console.log('💬 Marked as direct reply');
+                        }
+                    } catch (metadataError) {
+                        console.warn('Failed to parse message metadata:', metadataError);
+                    }
+                }
+
+                console.log('Processed message:', processed);
+                return processed;
             });
-            if (response.ok) {
-                const loadedMessages = await response.json();
-                console.log('Loaded messages:', loadedMessages.length);
-                
-                // Ensure messages have IDs and proper format
-                const processedMessages = loadedMessages.map(msg => {
-                    const processed = {
-                        ...msg,
-                        id: msg.id || `temp_${Date.now()}_${Math.random()}`, // Temporary ID for messages without DB ID
-                        sender: msg.sender_type || msg.sender, // Handle both formats
-                        text: msg.content || msg.text, // Handle both formats
-                        time: new Date(msg.created_at || msg.time), // Handle both formats
-                        model: msg.ai_models?.name || msg.model // Handle model name
-                    };
 
-                    // Parse metadata for reply information
-                    if (msg.metadata) {
-                        try {
-                            const metadata = typeof msg.metadata === 'string' ? JSON.parse(msg.metadata) : msg.metadata;
-                            console.log('📖 Processing message metadata for msg', msg.id, ':', metadata);
-                            if (metadata.reply_to_message_id) {
-                                processed.replyToMessageId = metadata.reply_to_message_id;
-                                console.log('🔗 Found reply relationship:', processed.replyToMessageId);
-                            }
-                            if (metadata.conversation_mode === 'direct' || metadata.is_direct_reply) {
-                                processed.isDirectReply = true;
-                                console.log('💬 Marked as direct reply');
-                            }
-                        } catch (e) {
-                            console.warn('Failed to parse message metadata:', e);
-                        }
-                    }
-
-                    console.log('Processed message:', processed);
-                    return processed;
-                });
-
-                // Second pass: resolve reply relationships
-                const messagesWithReplies = processedMessages.map(msg => {
-                    if (msg.replyToMessageId) {
-                        // Find the message this is replying to
-                        const replyToMessage = processedMessages.find(m => m.id === msg.replyToMessageId);
-                        console.log('🔍 Looking for reply target:', msg.replyToMessageId, 'found:', !!replyToMessage);
-                        if (replyToMessage) {
-                            msg.replyTo = {
-                                id: replyToMessage.id,
-                                text: replyToMessage.text,
-                                model: replyToMessage.model,
-                                sender: replyToMessage.sender
-                            };
-                        }
-                    }
-                    return msg;
-                });
-
-                setMessages(messagesWithReplies);
-
-                // Update conversation title based on active conversation
-                const activeConv = conversations.find(c => c.id === activeConversationId);
-                if (activeConv) {
-                    setConversationTitle(activeConv.title || 'AI Group Chat');
-                }
-                
-                // Generate title if we have user messages and no custom title
-                const hasUserMessages = processedMessages.some(msg => msg.sender === 'user');
-                if (hasUserMessages && (!activeConv || activeConv.title === 'New Chat')) {
-                    generateTitle();
-                }
-            } else {
-                console.error('Failed to load messages, status:', response.status, response.statusText);
-                // Try fallback to old API
-                const fallbackResponse = await fetch(`${BACKEND_URL}/api/messages`);
-                if (fallbackResponse.ok) {
-                    const loadedMessages = await fallbackResponse.json();
-                    const processedMessages = loadedMessages.map(msg => {
-                        const processed = {
-                            ...msg,
-                            id: msg.id || Date.now() + Math.random(),
-                            sender: msg.sender_type || msg.sender,
-                            text: msg.content || msg.text,
-                            time: new Date(msg.created_at || msg.time)
+            const messagesWithReplies = processedMessages.map(msg => {
+                if (msg.replyToMessageId) {
+                    const replyToMessage = processedMessages.find(m => m.id === msg.replyToMessageId);
+                    console.log('🔍 Looking for reply target:', msg.replyToMessageId, 'found:', Boolean(replyToMessage));
+                    if (replyToMessage) {
+                        msg.replyTo = {
+                            id: replyToMessage.id,
+                            text: replyToMessage.text,
+                            model: replyToMessage.model,
+                            sender: replyToMessage.sender
                         };
-
-                        // Parse metadata for reply information (fallback)
-                        if (msg.metadata) {
-                            try {
-                                const metadata = typeof msg.metadata === 'string' ? JSON.parse(msg.metadata) : msg.metadata;
-                                if (metadata.reply_to_message_id) {
-                                    processed.replyToMessageId = metadata.reply_to_message_id;
-                                }
-                                if (metadata.conversation_mode === 'direct' || metadata.is_direct_reply) {
-                                    processed.isDirectReply = true;
-                                }
-                            } catch (e) {
-                                console.warn('Failed to parse fallback message metadata:', e);
-                            }
-                        }
-
-                        return processed;
-                    });
-
-                    // Resolve reply relationships for fallback messages
-                    const messagesWithReplies = processedMessages.map(msg => {
-                        if (msg.replyToMessageId) {
-                            const replyToMessage = processedMessages.find(m => m.id === msg.replyToMessageId);
-                            if (replyToMessage) {
-                                msg.replyTo = {
-                                    id: replyToMessage.id,
-                                    text: replyToMessage.text,
-                                    model: replyToMessage.model,
-                                    sender: replyToMessage.sender
-                                };
-                            }
-                        }
-                        return msg;
-                    });
-                    setMessages(messagesWithReplies);
+                    }
                 }
+                return msg;
+            });
+
+            return { processedMessages, messagesWithReplies };
+        };
+
+        try {
+            const textPayload = await response.text();
+            const loadedMessages = JSON.parse(textPayload);
+            console.log('Loaded messages:', loadedMessages.length);
+
+            const { processedMessages, messagesWithReplies } = normalizeMessages(loadedMessages);
+
+            setMessages(messagesWithReplies);
+
+            const activeConv = conversations.find(c => c.id === activeConversationId);
+            if (activeConv) {
+                setConversationTitle(activeConv.title || 'AI Group Chat');
+            }
+
+            const hasUserMessages = processedMessages.some(msg => msg.sender === 'user');
+            if (hasUserMessages && (!activeConv || activeConv.title === 'New Chat')) {
+                generateTitle();
             }
         } catch (error) {
             console.error('Failed to load messages:', error);
-            // Fallback to default welcome message if loading fails
+
+            try {
+                const fallbackResponse = await fetch(`${BACKEND_URL}/api/messages`, {
+                    headers: getAuthHeaders()
+                });
+
+                if (fallbackResponse.ok) {
+                    const fallbackMessages = await fallbackResponse.json();
+                    const { messagesWithReplies } = normalizeMessages(fallbackMessages);
+
+                    setMessages(messagesWithReplies);
+
+                    const activeConv = conversations.find(c => c.id === activeConversationId);
+                    if (activeConv) {
+                        setConversationTitle(activeConv.title || 'AI Group Chat');
+                    }
+
+                    return;
+                }
+            } catch (fallbackError) {
+                console.error('Failed to load fallback messages:', fallbackError);
+            }
+
             setMessages([
                 { id: 'welcome', sender: 'system', text: 'Welcome to the AI Group Chat! Select a First Responder and ask a question to begin.', time: new Date() }
             ]);
+        }
+    };
+
+
+    const removeConversationFromState = (conversationId) => {
+        setConversations(prev => {
+            const updated = prev.filter(conversation => conversation.id !== conversationId);
+            if (conversationId === activeConversationId) {
+                const nextConversationId = updated.length > 0 ? updated[0].id : null;
+                setActiveConversationId(nextConversationId);
+                setMessages([]);
+            }
+            return updated;
+        });
+        setIsSidebarOpen(false);
+    };
+
+    const deleteConversation = async (conversationId, scope = 'me') => {
+        try {
+            const response = await fetch(`${BACKEND_URL}/api/conversations/${conversationId}?scope=${scope}`, {
+                method: 'DELETE',
+                headers: getAuthHeaders()
+            });
+
+            if (!response.ok) {
+                const errorBody = await response.json().catch(() => ({}));
+                const message = errorBody?.error || 'Failed to delete conversation';
+                throw new Error(message);
+            }
+
+            removeConversationFromState(conversationId);
+        } catch (error) {
+            console.error('Failed to delete conversation:', error);
+            throw error;
+        }
+    };
+
+    const handleDeleteConversationForMe = async (conversationId) => {
+        try {
+            await deleteConversation(conversationId, 'me');
+        } catch (error) {
+            alert(error.message || 'Unable to delete chat for you');
+        }
+    };
+
+    const handleDeleteConversationPermanently = async (conversationId) => {
+        const confirmed = window.confirm('Delete this conversation permanently for everyone? This cannot be undone.');
+        if (!confirmed) {
+            return;
+        }
+        try {
+            await deleteConversation(conversationId, 'all');
+        } catch (error) {
+            alert(error.message || 'Unable to delete chat');
         }
     };
 
@@ -729,18 +821,6 @@ function App() {
         }
     };
 
-    // Force start in chat view on app load
-    useEffect(() => {
-        setCurrentView('chat');
-    }, []);
-
-    // Load prompts when user changes or view changes to profile
-    useEffect(() => {
-        if (user && currentView === 'profile') {
-            loadPrompts();
-        }
-    }, [user, currentView]);
-
     const activeConversation = getConversationById(activeConversationId);
     const activeConversationName = activeConversation?.title || conversationTitle;
     const activeConversationAvatar = getConversationAvatarUrl(activeConversation);
@@ -748,17 +828,32 @@ function App() {
         ? `Direct with ${replyToMessage?.model || 'Model'}`
         : 'Online';
 
+    const handleSelectConversation = (conversationId) => {
+        setActiveConversationId(conversationId);
+        setIsSidebarOpen(false);
+    };
+
     return (
         <div className="chat-shell">
+            {isSidebarOpen && (
+                <div
+                    className="chat-sidebar__overlay lg:hidden"
+                    onClick={() => setIsSidebarOpen(false)}
+                />
+            )}
             <Sidebar
                 conversations={conversations}
                 activeConversationId={activeConversationId}
-                onConversationSelect={setActiveConversationId}
+                onConversationSelect={handleSelectConversation}
                 onNewConversation={createNewConversation}
                 onProfileClick={() => setCurrentView(currentView === 'profile' ? 'chat' : 'profile')}
                 userProfile={userProfile || user}
                 signOut={signOut}
                 resolveAvatarUrl={getConversationAvatarUrl}
+                onDeleteConversation={handleDeleteConversationForMe}
+                onDeleteConversationPermanently={handleDeleteConversationPermanently}
+                isMobileOpen={isSidebarOpen}
+                onMobileClose={() => setIsSidebarOpen(false)}
             />
 
             <div className="chat-main">
@@ -780,6 +875,14 @@ function App() {
                         <>
                             <header className="chat-header">
                                 <div className="chat-header__info">
+                                    <button
+                                        type="button"
+                                        className="chat-header__menu-button lg:hidden"
+                                        onClick={() => setIsSidebarOpen(true)}
+                                        aria-label="Show conversations"
+                                    >
+                                        <Menu className="h-5 w-5" />
+                                    </button>
                                     <ConversationAvatar
                                         name={activeConversationName}
                                         imageSrc={activeConversationAvatar}
@@ -996,6 +1099,10 @@ const Sidebar = ({
     userProfile,
     signOut,
     resolveAvatarUrl,
+    onDeleteConversation,
+    onDeleteConversationPermanently,
+    isMobileOpen = false,
+    onMobileClose,
 }) => {
     const userAvatar = userProfile?.avatar_url
         ? (userProfile.avatar_url.startsWith('http')
@@ -1003,8 +1110,17 @@ const Sidebar = ({
             : `${BACKEND_URL}${userProfile.avatar_url}`)
         : null;
 
+    const sidebarClasses = cn('chat-sidebar', isMobileOpen && 'chat-sidebar--mobile-open');
+
+    const handleSelectConversation = (conversationId) => {
+        onConversationSelect(conversationId);
+        if (isMobileOpen) {
+            onMobileClose?.();
+        }
+    };
+
     return (
-        <aside className="chat-sidebar">
+        <aside className={sidebarClasses}>
             <div className="chat-sidebar__header">
                 <div className="chat-sidebar__profile">
                     <DropdownMenu>
@@ -1050,6 +1166,14 @@ const Sidebar = ({
                     >
                         <span className="text-lg leading-none">+</span>
                     </Button>
+                    <button
+                        type="button"
+                        className="chat-sidebar__close-btn lg:hidden"
+                        onClick={() => onMobileClose?.()}
+                        aria-label="Close conversations"
+                    >
+                        <X className="h-4 w-4" />
+                    </button>
                 </div>
             </div>
 
@@ -1082,7 +1206,7 @@ const Sidebar = ({
                         <button
                             type="button"
                             key={conversation.id}
-                            onClick={() => onConversationSelect(conversation.id)}
+                            onClick={() => handleSelectConversation(conversation.id)}
                             className={cn('chat-sidebar__item', isActive && 'chat-sidebar__item--active')}
                         >
                             <ConversationAvatar
@@ -1095,9 +1219,45 @@ const Sidebar = ({
                                 <p className="chat-sidebar__meta-title">{conversation.title || 'New Chat'}</p>
                                 <p className="chat-sidebar__meta-last">{lastMessage}</p>
                             </div>
-                            <span className="chat-sidebar__time">
-                                {conversation.updated_at ? formatConversationTime(conversation.updated_at) : ''}
-                            </span>
+                            <div className="chat-sidebar__item-actions">
+                                <span className="chat-sidebar__time">
+                                    {conversation.updated_at ? formatConversationTime(conversation.updated_at) : ''}
+                                </span>
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <button
+                                            type="button"
+                                            className="chat-sidebar__menu-btn"
+                                            onClick={(event) => event.stopPropagation()}
+                                            aria-label="Conversation options"
+                                        >
+                                            <MoreVertical className="h-4 w-4" />
+                                        </button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end" sideOffset={8} className="w-48 rounded-xl border border-whatsapp-divider bg-white p-1 shadow-panel">
+                                        <DropdownMenuItem
+                                            onSelect={(event) => {
+                                                event.preventDefault();
+                                                event.stopPropagation();
+                                                onDeleteConversation?.(conversation.id);
+                                            }}
+                                            className="flex items-center justify-between text-sm text-whatsapp-ink"
+                                        >
+                                            Delete for me
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem
+                                            onSelect={(event) => {
+                                                event.preventDefault();
+                                                event.stopPropagation();
+                                                onDeleteConversationPermanently?.(conversation.id);
+                                            }}
+                                            className="flex items-center justify-between text-sm text-red-600 focus:text-red-600"
+                                        >
+                                            Delete permanently
+                                        </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
+                            </div>
                         </button>
                     );
                 })}

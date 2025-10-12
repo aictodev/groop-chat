@@ -29,6 +29,8 @@ const SAMPLE_MODEL_MAP = {
     'moonshotai/kimi-k2': { name: 'Kimi K2', avatar: ' K ' }
 };
 
+const DEFAULT_MODEL_IDS = Object.keys(SAMPLE_MODEL_MAP);
+
 const SAMPLE_MESSAGES = [
     {
         id: 'sample-1',
@@ -132,6 +134,10 @@ class Database {
     // Get all messages for a conversation
     async getMessages(conversationId = SAMPLE_CONVERSATION_ID, userId = null) {
         try {
+            if (userId && conversationId) {
+                await this.assertConversationAccess(conversationId, userId);
+            }
+
             let query = supabase
                 .from('messages')
                 .select(`
@@ -141,10 +147,7 @@ class Database {
                 .eq('conversation_id', conversationId)
                 .order('created_at', { ascending: true });
 
-            if (userId) {
-                query = query.eq('user_id', userId);
-            }
-
+            // Conversation access is already enforced above; returning all messages for this conversation
             const { data, error } = await query;
 
             if (error) {
@@ -153,11 +156,17 @@ class Database {
             }
 
             if (!data || data.length === 0) {
+                if (userId && userId !== SAMPLE_USER_ID) {
+                    return [];
+                }
                 return clone(SAMPLE_MESSAGES.filter(msg => msg.conversation_id === conversationId));
             }
 
             return data;
         } catch (error) {
+            if (error?.status === 403) {
+                throw error;
+            }
             console.warn('Falling back to sample messages due to Supabase error:', error?.message || error);
             return clone(SAMPLE_MESSAGES.filter(msg => msg.conversation_id === conversationId));
         }
@@ -183,6 +192,9 @@ class Database {
             }
 
             if (!data || data.length === 0) {
+                if (userId && userId !== SAMPLE_USER_ID) {
+                    return [];
+                }
                 return clone(SAMPLE_MESSAGES.filter(msg => msg.user_id === userId));
             }
 
@@ -207,6 +219,10 @@ class Database {
 
         if (!userId || userId === 'null' || userId === 'undefined') {
             throw new Error('Valid user ID is required');
+        }
+
+        if (userId && conversationId) {
+            await this.assertConversationAccess(conversationId, userId);
         }
 
         console.log('Creating user message with validated params:', {
@@ -288,6 +304,10 @@ class Database {
 
         if (!modelId || modelId.trim() === '') {
             throw new Error('AI model ID is required');
+        }
+
+        if (userId && conversationId) {
+            await this.assertConversationAccess(conversationId, userId);
         }
 
         console.log('Creating AI message with validated params:', {
@@ -452,42 +472,129 @@ class Database {
     }
 
     // Get all conversations for user with last message preview
-    async getConversations() {
+    async getConversations(userId = SAMPLE_USER_ID) {
         try {
-            const { data, error } = await supabase
-                .from('conversations')
-                .select('*')
-                .order('updated_at', { ascending: false });
-
-            if (error) {
-                console.error('❌ Error fetching conversations:', error);
-                throw error;
-            }
-
-            if (!data || data.length === 0) {
+            if (!userId) {
                 return clone(SAMPLE_CONVERSATIONS);
             }
 
-            return data;
+            const { data: participantRows, error } = await supabase
+                .from('conversation_participants')
+                .select(`
+                    role,
+                    conversation_id,
+                    conversations!inner (
+                        id,
+                        title,
+                        created_by,
+                        created_at,
+                        updated_at,
+                        settings
+                    )
+                `)
+                .eq('user_id', userId)
+                .eq('is_active', true)
+                .order('conversations(updated_at)', { ascending: false });
+
+            if (error) {
+                console.error('❌ Error fetching conversations for user:', userId, error);
+                throw error;
+            }
+
+            if (!participantRows || participantRows.length === 0) {
+                return clone(SAMPLE_CONVERSATIONS);
+            }
+
+            const conversations = participantRows
+                .map((row) => {
+                    if (!row.conversations) return null;
+                    return {
+                        ...row.conversations,
+                        participant_role: row.role || 'member'
+                    };
+                })
+                .filter(Boolean);
+
+            const conversationIds = conversations.map((conv) => conv.id);
+
+            const lastMessageMap = await this.getLastMessagesForConversations(conversationIds).catch((err) => {
+                console.warn('Unable to fetch last messages:', err?.message || err);
+                return {};
+            });
+
+            return conversations.map((conversation) => {
+                const lastMessage = lastMessageMap[conversation.id];
+                return {
+                    ...conversation,
+                    last_message: lastMessage
+                        ? {
+                            sender_type: lastMessage.sender_type,
+                            content: lastMessage.content,
+                            created_at: lastMessage.created_at,
+                            ai_models: lastMessage.ai_models || (lastMessage.ai_model_id ? SAMPLE_MODEL_MAP[lastMessage.ai_model_id] : null)
+                        }
+                        : null
+                };
+            });
         } catch (e) {
             console.warn('Falling back to sample conversations due to Supabase error:', e?.message || e);
             return clone(SAMPLE_CONVERSATIONS);
         }
     }
 
+    async getLastMessagesForConversations(conversationIds = []) {
+        if (!conversationIds.length) {
+            return {};
+        }
+
+        try {
+            const { data, error } = await supabase
+                .from('messages')
+                .select(`
+                    id,
+                    conversation_id,
+                    sender_type,
+                    content,
+                    created_at,
+                    ai_model_id,
+                    ai_models(name, avatar)
+                `)
+                .in('conversation_id', conversationIds)
+                .order('created_at', { ascending: false });
+
+            if (error) {
+                throw error;
+            }
+
+            const map = {};
+            for (const message of data || []) {
+                if (!map[message.conversation_id]) {
+                    map[message.conversation_id] = message;
+                }
+            }
+
+            return map;
+        } catch (err) {
+            console.warn('Unable to load last messages, returning empty map:', err?.message || err);
+            return {};
+        }
+    }
+
     // Create new conversation
-    async createConversation() {
+    async createConversationForUser(userId = SAMPLE_USER_ID, title = 'New Chat') {
         const conversationId = crypto.randomUUID();
 
         try {
+            const now = new Date().toISOString();
+
             const { data: conversation, error: convError } = await supabase
                 .from('conversations')
                 .insert({
                     id: conversationId,
-                    title: 'New Chat',
-                    created_by: SAMPLE_USER_ID,
-                    created_at: new Date().toISOString(),
-                    updated_at: new Date().toISOString()
+                    title,
+                    created_by: userId,
+                    created_at: now,
+                    updated_at: now
                 })
                 .select()
                 .single();
@@ -498,12 +605,43 @@ class Database {
 
             try {
                 await supabase
+                    .from('conversation_participants')
+                    .insert({
+                        conversation_id: conversationId,
+                        user_id: userId,
+                        role: 'admin',
+                        joined_at: now
+                    });
+            } catch (participantError) {
+                if (participantError?.code !== '23505') { // unique violation
+                    console.error('Error adding conversation participant:', participantError);
+                }
+            }
+
+            try {
+                const modelRows = DEFAULT_MODEL_IDS.map((modelId) => ({
+                    conversation_id: conversationId,
+                    ai_model_id: modelId,
+                    is_active: true
+                }));
+
+                if (modelRows.length) {
+                    await supabase
+                        .from('conversation_ai_models')
+                        .insert(modelRows, { upsert: false });
+                }
+            } catch (modelError) {
+                console.warn('Unable to attach default models:', modelError?.message || modelError);
+            }
+
+            try {
+                await supabase
                     .from('messages')
                     .insert({
                         conversation_id: conversationId,
                         sender_type: 'system',
                         content: 'Welcome to the AI Group Chat! Select a First Responder and ask a question to begin.',
-                        created_at: new Date().toISOString()
+                        created_at: now
                     });
             } catch (msgError) {
                 console.error('Error creating welcome message:', msgError);
@@ -514,8 +652,8 @@ class Database {
             console.warn('Error creating conversation in Supabase, using fallback store:', error?.message || error);
             const fallbackConversation = {
                 id: conversationId,
-                title: 'New Chat',
-                created_by: SAMPLE_USER_ID,
+                title,
+                created_by: userId,
                 created_at: new Date().toISOString(),
                 updated_at: new Date().toISOString(),
                 last_message: null
@@ -525,7 +663,7 @@ class Database {
                 id: `sample-${Date.now()}`,
                 conversation_id: conversationId,
                 sender_type: 'system',
-                user_id: SAMPLE_USER_ID,
+                user_id: userId,
                 content: 'Welcome to the AI Group Chat! Select a First Responder and ask a question to begin.',
                 created_at: new Date().toISOString()
             });
@@ -533,9 +671,164 @@ class Database {
         }
     }
 
-    // Get conversation context (recent messages for context)
-    async getConversationContext(conversationId, limit = 10) {
+
+    async softDeleteConversation(conversationId, userId) {
+        if (!userId) {
+            throw new Error('User ID is required');
+        }
+
         try {
+            const { data, error } = await supabase
+                .from('conversation_participants')
+                .update({ is_active: false })
+                .eq('conversation_id', conversationId)
+                .eq('user_id', userId)
+                .select('id');
+
+            if (error) {
+                throw error;
+            }
+
+            if (!data || data.length === 0) {
+                const err = new Error('Conversation not found');
+                err.status = 404;
+                throw err;
+            }
+
+            return true;
+        } catch (error) {
+            if (error?.status === 403 || error?.status === 404) {
+                throw error;
+            }
+            console.warn('Unable to soft delete conversation in Supabase, falling back:', error?.message || error);
+
+            if (userId === SAMPLE_USER_ID) {
+                const conversationIndex = SAMPLE_CONVERSATIONS.findIndex(conv => conv.id === conversationId);
+                if (conversationIndex !== -1) {
+                    SAMPLE_CONVERSATIONS.splice(conversationIndex, 1);
+                }
+                for (let i = SAMPLE_MESSAGES.length - 1; i >= 0; i -= 1) {
+                    if (SAMPLE_MESSAGES[i].conversation_id === conversationId) {
+                        SAMPLE_MESSAGES.splice(i, 1);
+                    }
+                }
+            }
+
+            return true;
+        }
+    }
+
+    async deleteConversation(conversationId, userId) {
+        try {
+            await this.assertConversationAccess(conversationId, userId);
+
+            const { data: conversation, error: fetchError } = await supabase
+                .from('conversations')
+                .select('created_by')
+                .eq('id', conversationId)
+                .single();
+
+            if (fetchError) {
+                throw fetchError;
+            }
+
+            if (conversation?.created_by && conversation.created_by !== userId) {
+                const err = new Error('Only the conversation owner can delete it permanently');
+                err.status = 403;
+                throw err;
+            }
+
+            const { error: deleteError } = await supabase
+                .from('conversations')
+                .delete()
+                .eq('id', conversationId);
+
+            if (deleteError) {
+                throw deleteError;
+            }
+
+            return true;
+        } catch (error) {
+            if (error?.status === 403) {
+                throw error;
+            }
+            console.warn('Unable to delete conversation in Supabase, falling back:', error?.message || error);
+
+            const sampleIndex = SAMPLE_CONVERSATIONS.findIndex(conv => conv.id === conversationId);
+            if (sampleIndex !== -1) {
+                SAMPLE_CONVERSATIONS.splice(sampleIndex, 1);
+                for (let i = SAMPLE_MESSAGES.length - 1; i >= 0; i -= 1) {
+                    if (SAMPLE_MESSAGES[i].conversation_id === conversationId) {
+                        SAMPLE_MESSAGES.splice(i, 1);
+                    }
+                }
+                return true;
+            }
+
+            throw error;
+        }
+    }
+
+    async ensureDefaultConversation(userId) {
+        if (!userId || userId === SAMPLE_USER_ID) {
+            return;
+        }
+
+        try {
+            const { data, error } = await supabase
+                .from('conversation_participants')
+                .select('conversation_id')
+                .eq('user_id', userId)
+                .eq('is_active', true)
+                .limit(1);
+
+            if (error) {
+                throw error;
+            }
+
+            if (data && data.length > 0) {
+                return;
+            }
+
+            await this.createConversationForUser(userId);
+        } catch (err) {
+            console.warn('Unable to ensure default conversation:', err?.message || err);
+        }
+    }
+
+    async assertConversationAccess(conversationId, userId) {
+        if (!userId || userId === SAMPLE_USER_ID) {
+            return true;
+        }
+
+        const { data, error } = await supabase
+            .from('conversation_participants')
+            .select('id')
+            .eq('conversation_id', conversationId)
+            .eq('user_id', userId)
+            .eq('is_active', true)
+            .maybeSingle();
+
+        if (error) {
+            throw error;
+        }
+
+        if (!data) {
+            const err = new Error('conversation_access_denied');
+            err.status = 403;
+            throw err;
+        }
+
+        return true;
+    }
+
+    // Get conversation context (recent messages for context)
+    async getConversationContext(conversationId, limit = 10, userId = null) {
+        try {
+            if (userId && conversationId) {
+                await this.assertConversationAccess(conversationId, userId);
+            }
+
             const { data, error } = await supabase
                 .from('messages')
                 .select(`
@@ -556,7 +849,13 @@ class Database {
             
             return (data || []).reverse();
         } catch (err) {
+            if (err?.status === 403) {
+                throw err;
+            }
             console.warn('Falling back to sample conversation context:', err?.message || err);
+            if (userId && userId !== SAMPLE_USER_ID) {
+                return [];
+            }
             return clone(SAMPLE_MESSAGES
                 .filter(msg => msg.conversation_id === conversationId)
                 .slice(-limit));
@@ -622,8 +921,12 @@ class Database {
     }
 
     // Get conversation details (fallback to existing schema)
-    async getConversationDetails(conversationId) {
+    async getConversationDetails(conversationId, userId = null) {
         try {
+            if (userId && conversationId) {
+                await this.assertConversationAccess(conversationId, userId);
+            }
+
             const { data, error } = await supabase
                 .from('conversations')
                 .select(`
@@ -648,7 +951,13 @@ class Database {
                 thread_stage: 'initial'
             };
         } catch (err) {
+            if (err?.status === 403) {
+                throw err;
+            }
             console.warn('Falling back to sample conversation details:', err?.message || err);
+            if (userId && userId !== SAMPLE_USER_ID) {
+                return null;
+            }
             const conversation = SAMPLE_CONVERSATIONS.find(conv => conv.id === conversationId);
             if (!conversation) {
                 return null;
@@ -867,6 +1176,7 @@ class Database {
                 .single();
 
             if (existingUser && !fetchError) {
+                await this.ensureDefaultConversation(existingUser.id);
                 return existingUser;
             }
 
@@ -892,6 +1202,7 @@ class Database {
             }
 
             console.log('✅ Created new user record:', newUser.id, newUser.email);
+            await this.ensureDefaultConversation(newUser.id);
             return newUser;
         } catch (err) {
             console.warn('Falling back to sample user profile:', err?.message || err);

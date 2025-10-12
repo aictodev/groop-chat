@@ -87,12 +87,13 @@ CREATE INDEX idx_participants_conversation ON conversation_participants(conversa
 
 -- Insert AI models from current setup
 INSERT INTO ai_models (id, name, display_name, avatar, provider) VALUES
-('google/gemini-flash-1.5', 'Gemini', 'Gemini Flash 1.5', ' G ', 'google'),
+('google/gemini-2.5-flash', 'Gemini', 'Gemini 2.5 Flash', ' G ', 'google'),
 ('openai/gpt-4o-mini', 'GPT-4o mini', 'GPT-4o Mini', ' O ', 'openai'),
 ('anthropic/claude-3.5-sonnet', 'Claude', 'Claude 3.5 Sonnet', ' A ', 'anthropic'),
-('meta-llama/llama-3-8b-instruct', 'Llama', 'Llama 3 8B', ' L ', 'meta'),
-('deepseek/deepseek-chat', 'DeepSeek Chat', 'DeepSeek Chat V3.1', ' D ', 'deepseek'),
-('qwen/qwen-2-7b-instruct', 'Qwen', 'Qwen 2 7B', ' Q ', 'qwen');
+('meta-llama/llama-3-8b-instruct', 'Llama', 'Llama 3 8B Instruct', ' L ', 'meta'),
+('deepseek/deepseek-chat', 'DeepSeek Chat', 'DeepSeek Chat', ' D ', 'deepseek'),
+('qwen/qwen-2.5-7b-instruct', 'Qwen', 'Qwen 2.5 7B Instruct', ' Q ', 'qwen'),
+('moonshotai/kimi-k2', 'Kimi K2', 'Moonshot Kimi K2', ' K ', 'moonshotai');
 
 -- Create default test user (update username as needed)
 INSERT INTO users (id, username, display_name) VALUES
@@ -108,12 +109,13 @@ INSERT INTO conversation_participants (conversation_id, user_id, role) VALUES
 
 -- Add all AI models to the default conversation
 INSERT INTO conversation_ai_models (conversation_id, ai_model_id) VALUES
-('00000000-0000-0000-0000-000000000002', 'google/gemini-flash-1.5'),
+('00000000-0000-0000-0000-000000000002', 'google/gemini-2.5-flash'),
 ('00000000-0000-0000-0000-000000000002', 'openai/gpt-4o-mini'),
 ('00000000-0000-0000-0000-000000000002', 'anthropic/claude-3.5-sonnet'),
 ('00000000-0000-0000-0000-000000000002', 'meta-llama/llama-3-8b-instruct'),
 ('00000000-0000-0000-0000-000000000002', 'deepseek/deepseek-chat'),
-('00000000-0000-0000-0000-000000000002', 'qwen/qwen-2-7b-instruct');
+('00000000-0000-0000-0000-000000000002', 'qwen/qwen-2.5-7b-instruct'),
+('00000000-0000-0000-0000-000000000002', 'moonshotai/kimi-k2');
 
 -- Add initial system message
 INSERT INTO messages (id, conversation_id, sender_type, content, created_at) VALUES

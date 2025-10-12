@@ -78,12 +78,145 @@
 }
 
 @layer components {
+  .landing-shell {
+    @apply flex min-h-screen text-white;
+    background: radial-gradient(circle at top left, rgba(111, 78, 235, 0.25) 0%, rgba(14, 6, 40, 0.8) 45%, rgba(2, 0, 12, 0.95) 100%);
+  }
+
+  .landing-hero {
+    @apply flex-1 relative flex items-center justify-center overflow-hidden;
+    background: linear-gradient(145deg, #090221 0%, #030014 60%, #02000d 100%);
+  }
+
+  .landing-hero__inner {
+    @apply mx-auto flex max-w-xl flex-col gap-8 px-12 text-left;
+  }
+
+  .landing-brand {
+    @apply text-sm font-semibold uppercase tracking-[0.4em] text-purple-200;
+  }
+
+  .landing-headline {
+    @apply flex flex-col gap-4 text-4xl font-bold leading-tight text-purple-100 md:text-5xl;
+  }
+
+  .landing-headline__accent {
+    @apply text-5xl text-purple-300 md:text-6xl;
+  }
+
+  .landing-headline__text {
+    @apply text-3xl font-light text-purple-200 md:text-4xl;
+  }
+
+  .landing-subcopy {
+    @apply text-base leading-relaxed text-purple-200/80 md:text-lg;
+    max-width: 32rem;
+  }
+
+  .landing-panel {
+    @apply flex min-h-screen w-full max-w-xl flex-1 items-center justify-center bg-black px-10 text-white;
+  }
+
+  .landing-panel__content {
+    @apply flex w-full max-w-sm flex-col items-center gap-8 text-center;
+  }
+
+  .landing-panel__title {
+    @apply text-3xl font-semibold text-white;
+  }
+
+  .landing-panel__subtitle {
+    @apply text-sm text-neutral-400;
+  }
+
+  .landing-form {
+    @apply w-full space-y-5 rounded-3xl border border-white/10 bg-white/5 p-6 shadow-[0_8px_32px_rgba(15,23,42,0.25)] backdrop-blur;
+  }
+
+  .landing-tabs {
+    @apply flex items-center justify-center gap-2 rounded-full bg-white/10 p-1;
+  }
+
+  .landing-tab {
+    @apply w-1/2 rounded-full px-4 py-2 text-sm font-medium text-neutral-300 transition;
+  }
+
+  .landing-tab--active {
+    @apply bg-white text-black shadow;
+  }
+
+  .landing-fields {
+    @apply space-y-4 text-left;
+  }
+
+  .landing-field {
+    @apply flex flex-col gap-2 text-xs uppercase tracking-wide text-neutral-400;
+  }
+
+  .landing-field input {
+    @apply rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-base font-medium text-white placeholder:text-neutral-500 focus:border-white/40 focus:outline-none;
+  }
+
+  .landing-submit {
+    @apply w-full rounded-full bg-white py-3 text-sm font-semibold text-black transition hover:bg-neutral-100 disabled:cursor-not-allowed disabled:bg-white/60 disabled:text-neutral-400;
+  }
+
+  .landing-error {
+    @apply rounded-xl border border-red-500/60 bg-red-500/10 px-4 py-2 text-xs font-medium text-red-200;
+  }
+
+  .landing-divider {
+    @apply relative flex w-full items-center justify-center text-xs uppercase tracking-[0.4em] text-neutral-500;
+  }
+
+  .landing-divider::before,
+  .landing-divider::after {
+    content: "";
+    @apply h-px flex-1 bg-white/10;
+  }
+
+  .landing-divider span {
+    @apply px-4;
+  }
+
+  .landing-google-btn {
+    @apply mt-2 flex w-full items-center justify-center gap-3 rounded-full bg-blue-500 px-6 py-5 text-base font-semibold text-white transition hover:bg-blue-400 focus-visible:ring-2 focus-visible:ring-blue-200;
+  }
+
+  .landing-google-btn__icon {
+    @apply h-5 w-5;
+  }
+
+  .landing-links {
+    @apply flex items-center gap-3 text-xs text-neutral-500;
+  }
+
+  .landing-link {
+    @apply transition hover:text-neutral-300;
+  }
+
+  @screen lg {
+    .landing-shell {
+      @apply flex-row;
+    }
+  }
+
+  @media (max-width: 1023px) {
+    .landing-shell {
+      @apply flex-col;
+    }
+
+    .landing-panel {
+      @apply max-w-none py-16;
+    }
+  }
+
   .chat-shell {
     @apply flex h-screen w-full bg-whatsapp-surface text-whatsapp-ink;
   }
 
   .chat-sidebar {
-    @apply hidden lg:flex flex-col w-[var(--chat-sidebar-width,360px)] border-r border-whatsapp-border bg-whatsapp-surface;
+    @apply hidden lg:flex flex-col w-[var(--chat-sidebar-width,360px)] border-r border-whatsapp-border bg-whatsapp-surface overflow-hidden;
   }
 
   .chat-sidebar__header {
@@ -111,18 +244,21 @@
   }
 
   .chat-sidebar__list {
-    @apply flex-1 overflow-y-auto px-3 pb-6 space-y-2;
+    @apply flex-1 overflow-y-auto overflow-x-hidden px-3 pb-6 space-y-2;
   }
 
   .chat-sidebar__item {
     display: flex;
     gap: 0.75rem;
+    width: 100%;
+    align-items: flex-start;
     border-radius: 20px;
     border: 1px solid transparent;
     background: transparent;
     padding: 0.75rem 1rem;
     transition: all 150ms ease-out;
     cursor: pointer;
+    text-align: left;
   }
 
   .chat-sidebar__item:hover {
@@ -152,7 +288,45 @@
   }
 
   .chat-sidebar__time {
-    @apply ml-3 text-xs text-whatsapp-ink-subtle;
+    @apply text-xs text-whatsapp-ink-subtle whitespace-nowrap;
+  }
+
+  .chat-sidebar__item-actions {
+    @apply flex flex-col items-end gap-2 ml-2;
+  }
+
+  .chat-sidebar__menu-btn {
+    @apply flex h-8 w-8 items-center justify-center rounded-full text-whatsapp-ink-subtle transition hover:bg-white/70 hover:text-whatsapp-ink focus:outline-none;
+  }
+
+  .chat-header__menu-button {
+    @apply flex h-10 w-10 items-center justify-center rounded-full text-whatsapp-ink-subtle transition hover:bg-white/70 hover:text-whatsapp-ink focus:outline-none;
+  }
+
+  .chat-sidebar__close-btn {
+    @apply flex h-9 w-9 items-center justify-center rounded-full text-whatsapp-ink-subtle transition hover:bg-white/70 hover:text-whatsapp-ink focus:outline-none;
+  }
+
+  .chat-sidebar__overlay {
+    @apply fixed inset-0 z-30 bg-black/40 backdrop-blur-sm;
+  }
+
+  @media (max-width: 1023px) {
+    .chat-shell {
+      @apply flex-col;
+    }
+
+    .chat-main {
+      @apply h-full;
+    }
+
+    .chat-sidebar--mobile-open {
+      @apply fixed inset-0 z-40 flex w-full flex-col bg-whatsapp-surface;
+    }
+
+    .chat-sidebar--mobile-open .chat-sidebar__list {
+      @apply flex-1;
+    }
   }
 
   .chat-main {

@@ -2,6 +2,7 @@ require('dotenv').config({ path: '../.env' });
 const express = require('express');
 const axios = require('axios');
 const cors = require('cors');
+const { createClient } = require('@supabase/supabase-js');
 const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
@@ -39,6 +40,10 @@ const upload = multer({
 const OPENROUTER_API_KEY = (process.env.OPENROUTER_API_KEY || '').trim();
 const FALLBACK_USER_ID = '00000000-0000-0000-0000-000000000001';
 const API_URL = 'https://openrouter.ai/api/v1/chat/completions';
+
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const supabase = supabaseUrl && supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey) : null;
 
 // Define the models participating in the chat
 const ALL_MODELS = [
@@ -271,7 +276,8 @@ app.get('/api/messages', optionalAuth, async (req, res) => {
  */
 app.get('/api/conversations', optionalAuth, async (req, res) => {
     try {
-        const conversations = await database.getConversations();
+        const userId = req.user?.id || FALLBACK_USER_ID;
+        const conversations = await database.getConversations(userId);
         res.json(conversations);
     } catch (error) {
         console.error('Error fetching conversations:', error);
@@ -284,13 +290,40 @@ app.get('/api/conversations', optionalAuth, async (req, res) => {
  */
 app.post('/api/conversations', authenticateUser, async (req, res) => {
     try {
-        const conversation = await database.createConversation();
+        const userId = req.user?.id || FALLBACK_USER_ID;
+        const conversation = await database.createConversationForUser(userId);
         res.json(conversation);
     } catch (error) {
         console.error('Error creating conversation:', error);
         res.status(500).json({ error: 'Failed to create conversation' });
     }
 });
+
+app.delete('/api/conversations/:conversationId', authenticateUser, async (req, res) => {
+    const { conversationId } = req.params;
+    const scope = req.query.scope === 'all' ? 'all' : 'me';
+    const userId = req.user?.id || FALLBACK_USER_ID;
+
+    try {
+        if (scope === 'all') {
+            await database.deleteConversation(conversationId, userId);
+        } else {
+            await database.softDeleteConversation(conversationId, userId);
+        }
+
+        res.json({ success: true, scope });
+    } catch (error) {
+        console.error('Error deleting conversation:', error);
+        if (error?.status === 403) {
+            return res.status(403).json({ error: error.message || 'Not allowed to delete this conversation' });
+        }
+        if (error?.status === 404) {
+            return res.status(404).json({ error: 'Conversation not found' });
+        }
+        res.status(500).json({ error: 'Failed to delete conversation' });
+    }
+});
+
 
 /**
  * Get messages for a specific conversation
@@ -323,6 +356,9 @@ app.get('/api/conversations/:conversationId/messages', optionalAuth, async (req,
         res.json(transformedMessages);
     } catch (error) {
         console.error('Error fetching conversation messages:', error);
+        if (error?.status === 403) {
+            return res.status(403).json({ error: 'Conversation not found' });
+        }
         res.status(500).json({ error: 'Failed to fetch conversation messages' });
     }
 });
@@ -394,6 +430,8 @@ app.post('/api/chat', optionalAuth, async (req, res) => {
         return res.status(400).json({ error: 'Prompt is required.' });
     }
 
+    const userId = req.user?.id || FALLBACK_USER_ID;
+
     // Determine which models to use based on new selectedModels parameter
     let modelsToUse = [];
     if (conversationMode === 'group') {
@@ -431,23 +469,25 @@ app.post('/api/chat', optionalAuth, async (req, res) => {
         // Get the conversation ID, or use the first available conversation if none provided
         let targetConversationId = conversationId;
         if (!targetConversationId) {
-            const conversations = await database.getConversations();
+            const conversations = await database.getConversations(userId);
             if (conversations.length > 0) {
                 targetConversationId = conversations[0].id;
             } else {
                 // If no conversations exist, create a new one
-                const newConv = await database.createConversation();
+                const newConv = await database.createConversationForUser(userId);
                 targetConversationId = newConv.id;
             }
         }
         const maxChars = characterLimit || 280;
 
         // Get conversation details and context
-        const conversationDetails = await database.getConversationDetails(targetConversationId);
-        const conversationContext = await database.getConversationContext(targetConversationId, 10);
-        
+        const conversationDetails = await database.getConversationDetails(targetConversationId, userId);
+        if (!conversationDetails) {
+            throw new Error('Conversation not found');
+        }
+        const conversationContext = await database.getConversationContext(targetConversationId, 10, userId);
+
         // Save user message to database
-        const userId = req.user?.id || FALLBACK_USER_ID;
         console.log('Creating user message with:', {
             userId,
             conversationId: targetConversationId,
@@ -615,11 +655,12 @@ app.post('/api/chat', optionalAuth, async (req, res) => {
         res.end();
 
     } catch (error) {
+        const accessDenied = error?.status === 403;
         console.error('Error processing chat:', error.response ? error.response.data : error.message);
-        
+
         res.write(`data: ${JSON.stringify({ 
             type: 'error', 
-            message: error.message 
+            message: accessDenied ? 'You do not have access to this conversation.' : error.message 
         })}\n\n`);
         res.end();
     }
@@ -744,31 +785,51 @@ app.post('/api/profile/avatar', optionalAuth, upload.single('avatar'), async (re
         }
 
         const userId = req.user?.id || FALLBACK_USER_ID;
-        const fileName = `${userId}_${uuidv4()}.jpg`;
-        const filePath = path.join(__dirname, 'uploads', 'profiles', fileName);
 
-        // Ensure directory exists
-        const dir = path.dirname(filePath);
-        if (!fs.existsSync(dir)) {
-            fs.mkdirSync(dir, { recursive: true });
+        if (!supabase || !supabaseServiceKey || !supabaseUrl) {
+            return res.status(500).json({ error: 'Supabase storage is not configured on the server' });
         }
 
-        // Process and save image using sharp
-        await sharp(req.file.buffer)
+        const bucket = process.env.SUPABASE_AVATAR_BUCKET || 'avatars';
+
+        const fileName = `${userId}_${uuidv4()}.jpg`;
+
+        const processedBuffer = await sharp(req.file.buffer)
             .resize(200, 200, { fit: 'cover' })
             .jpeg({ quality: 85 })
-            .toFile(filePath);
+            .toBuffer();
 
-        // Update user avatar_url in database
-        const avatarUrl = `/uploads/profiles/${fileName}`;
-        await database.updateUserAvatar(userId, avatarUrl);
+        const uploadPath = `profiles/${userId}/${fileName}`;
+        const { data: storageData, error: storageError } = await supabase.storage
+            .from(bucket)
+            .upload(uploadPath, processedBuffer, {
+                contentType: 'image/jpeg',
+                upsert: true
+            });
+
+        if (storageError) {
+            console.error('Error uploading avatar to Supabase storage:', storageError);
+            return res.status(500).json({ error: 'Failed to upload profile picture' });
+        }
+
+        let publicUrl = null;
+        const { data: urlData } = supabase.storage
+            .from(bucket)
+            .getPublicUrl(storageData.path);
+        publicUrl = urlData?.publicUrl || null;
+
+        if (!publicUrl) {
+            const origin = supabaseUrl.replace(/\/auth.*$/, '').replace(/\/$/, '');
+            publicUrl = `${origin}/storage/v1/object/public/${bucket}/${storageData.path}`;
+        }
+
+        await database.updateUserAvatar(userId, publicUrl);
 
         res.json({
             success: true,
-            avatarUrl: avatarUrl,
+            avatarUrl: publicUrl,
             message: 'Profile picture updated successfully'
         });
-
     } catch (error) {
         console.error('Error uploading profile picture:', error);
         res.status(500).json({ error: 'Failed to upload profile picture' });

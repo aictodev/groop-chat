@@ -78,6 +78,12 @@ export const AuthProvider = ({ children }) => {
                 password
             })
             if (error) throw error
+
+            const { error: signInError } = await supabase.auth.signInWithPassword({
+                email,
+                password
+            })
+            if (signInError) throw signInError
         } catch (error) {
             console.error('Error signing up:', error.message)
             throw error
