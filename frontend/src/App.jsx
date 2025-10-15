@@ -143,9 +143,7 @@ function App() {
             return null;
         }
 
-        return storedAvatar.startsWith('http')
-            ? storedAvatar
-            : `${BACKEND_URL}${storedAvatar}`;
+        return storedAvatar;
     };
 
     // Helper function to get auth headers
