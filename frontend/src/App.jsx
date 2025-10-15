@@ -258,7 +258,7 @@ function App() {
     const handleAvatarUpdate = (avatarUrl) => {
         setUserProfile(prev => ({
             ...prev,
-            avatar_url: avatarUrl.replace('http://localhost:7001', '')
+            avatar_url: avatarUrl
         }));
     };
 
