@@ -409,7 +409,11 @@ function App() {
             if (conversationId === activeConversationId) {
                 const nextConversationId = updated.length > 0 ? updated[0].id : null;
                 setActiveConversationId(nextConversationId);
-                setMessages([]);
+                if (nextConversationId) {
+                    loadMessages();
+                } else {
+                    setMessages([]);
+                }
             }
             return updated;
         });
@@ -439,6 +443,7 @@ function App() {
     const handleDeleteConversationForMe = async (conversationId) => {
         try {
             await deleteConversation(conversationId, 'me');
+            refreshAfterConversationDelete();
         } catch (error) {
             alert(error.message || 'Unable to delete chat for you');
         }
