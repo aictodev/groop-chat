@@ -260,7 +260,7 @@ function App() {
         }));
     };
 
-    const loadConversations = async () => {
+    const loadConversations = async (preferredConversationId = null) => {
         try {
             const response = await fetch(`${BACKEND_URL}/api/conversations`, {
                 headers: getAuthHeaders()
@@ -269,9 +269,19 @@ function App() {
                 const loadedConversations = await response.json();
                 setConversations(loadedConversations);
 
-                // If no active conversation is set and we have conversations, set the first one as active
-                if (!activeConversationId && loadedConversations.length > 0) {
-                    setActiveConversationId(loadedConversations[0].id);
+                const targetConversationId = preferredConversationId
+                    || (loadedConversations.some(conversation => conversation.id === activeConversationId)
+                        ? activeConversationId
+                        : null);
+
+                if (targetConversationId && targetConversationId !== activeConversationId) {
+                    setActiveConversationId(targetConversationId);
+                } else if (!targetConversationId) {
+                    const fallbackId = loadedConversations.length > 0 ? loadedConversations[0].id : null;
+                    setActiveConversationId(fallbackId);
+                    if (!fallbackId) {
+                        setMessages([]);
+                    }
                 }
             }
         } catch (error) {
@@ -409,9 +419,7 @@ function App() {
             if (conversationId === activeConversationId) {
                 const nextConversationId = updated.length > 0 ? updated[0].id : null;
                 setActiveConversationId(nextConversationId);
-                if (nextConversationId) {
-                    loadMessages();
-                } else {
+                if (!nextConversationId) {
                     setMessages([]);
                 }
             }
@@ -440,10 +448,14 @@ function App() {
         }
     };
 
+    const refreshConversationsAfterDelete = async () => {
+        await loadConversations();
+    };
+
     const handleDeleteConversationForMe = async (conversationId) => {
         try {
             await deleteConversation(conversationId, 'me');
-            refreshAfterConversationDelete();
+            await refreshConversationsAfterDelete();
         } catch (error) {
             alert(error.message || 'Unable to delete chat for you');
         }
@@ -456,6 +468,7 @@ function App() {
         }
         try {
             await deleteConversation(conversationId, 'all');
+            await refreshConversationsAfterDelete();
         } catch (error) {
             alert(error.message || 'Unable to delete chat');
         }
@@ -470,7 +483,7 @@ function App() {
             if (response.ok) {
                 const newConversation = await response.json();
                 setActiveConversationId(newConversation.id);
-                await loadConversations(); // Refresh conversation list
+                await loadConversations(newConversation.id); // Refresh conversation list and focus the new one
             }
         } catch (error) {
             console.error('Failed to create new conversation:', error);
