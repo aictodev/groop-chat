@@ -291,7 +291,8 @@ app.get('/api/conversations', optionalAuth, async (req, res) => {
 app.post('/api/conversations', authenticateUser, async (req, res) => {
     try {
         const userId = req.user?.id || FALLBACK_USER_ID;
-        const conversation = await database.createConversationForUser(userId);
+        console.log('Creating conversation for user', userId);
+        const conversation = await database.createConversationForUser(userId, 'New Chat', req.authToken);
         res.json(conversation);
     } catch (error) {
         console.error('Error creating conversation:', error);
@@ -474,7 +475,7 @@ app.post('/api/chat', optionalAuth, async (req, res) => {
                 targetConversationId = conversations[0].id;
             } else {
                 // If no conversations exist, create a new one
-                const newConv = await database.createConversationForUser(userId);
+                const newConv = await database.createConversationForUser(userId, 'New Chat', req.authToken);
                 targetConversationId = newConv.id;
             }
         }

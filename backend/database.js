@@ -581,13 +581,22 @@ class Database {
     }
 
     // Create new conversation
-    async createConversationForUser(userId = SAMPLE_USER_ID, title = 'New Chat') {
+    async createConversationForUser(userId = SAMPLE_USER_ID, title = 'New Chat', authToken = null) {
         const conversationId = crypto.randomUUID();
 
         try {
             const now = new Date().toISOString();
 
-            const { data: conversation, error: convError } = await supabase
+            let client = supabase;
+            if (authToken) {
+                client = createClient(supabaseUrl, supabaseAnonKey, {
+                    global: {
+                        headers: { Authorization: `Bearer ${authToken}` }
+                    }
+                });
+            }
+
+            const { data: conversation, error: convError } = await client
                 .from('conversations')
                 .insert({
                     id: conversationId,
@@ -604,7 +613,7 @@ class Database {
             }
 
             try {
-                await supabase
+                await client
                     .from('conversation_participants')
                     .insert({
                         conversation_id: conversationId,
@@ -613,9 +622,12 @@ class Database {
                         joined_at: now
                     });
             } catch (participantError) {
-                if (participantError?.code !== '23505') { // unique violation
-                    console.error('Error adding conversation participant:', participantError);
-                }
+                if (participantError?.code === '23505') {
+                    // unique violation is fine, means the row already exists for this user
+                } else {
+            console.error('Error adding conversation participant:', participantError);
+            throw participantError;
+        }
             }
 
             try {
@@ -626,7 +638,7 @@ class Database {
                 }));
 
                 if (modelRows.length) {
-                    await supabase
+                    await client
                         .from('conversation_ai_models')
                         .insert(modelRows, { upsert: false });
                 }
@@ -635,7 +647,7 @@ class Database {
             }
 
             try {
-                await supabase
+                await client
                     .from('messages')
                     .insert({
                         conversation_id: conversationId,
@@ -649,25 +661,8 @@ class Database {
 
             return conversation;
         } catch (error) {
-            console.warn('Error creating conversation in Supabase, using fallback store:', error?.message || error);
-            const fallbackConversation = {
-                id: conversationId,
-                title,
-                created_by: userId,
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
-                last_message: null
-            };
-            SAMPLE_CONVERSATIONS.unshift(fallbackConversation);
-            SAMPLE_MESSAGES.push({
-                id: `sample-${Date.now()}`,
-                conversation_id: conversationId,
-                sender_type: 'system',
-                user_id: userId,
-                content: 'Welcome to the AI Group Chat! Select a First Responder and ask a question to begin.',
-                created_at: new Date().toISOString()
-            });
-            return clone(fallbackConversation);
+            console.error('Error creating conversation in Supabase:', error?.message || error);
+            throw error;
         }
     }
 
@@ -769,7 +764,7 @@ class Database {
         }
     }
 
-    async ensureDefaultConversation(userId) {
+    async ensureDefaultConversation(userId, authToken = null) {
         if (!userId || userId === SAMPLE_USER_ID) {
             return;
         }
@@ -790,7 +785,7 @@ class Database {
                 return;
             }
 
-            await this.createConversationForUser(userId);
+            await this.createConversationForUser(userId, 'New Chat', authToken);
         } catch (err) {
             console.warn('Unable to ensure default conversation:', err?.message || err);
         }
@@ -1167,7 +1162,7 @@ class Database {
     }
 
     // Ensure user exists in our custom users table (for Supabase Auth users)
-    async ensureUserExists(authUser) {
+    async ensureUserExists(authUser, authToken = null) {
         try {
             const { data: existingUser, error: fetchError } = await supabase
                 .from('users')
@@ -1176,7 +1171,7 @@ class Database {
                 .single();
 
             if (existingUser && !fetchError) {
-                await this.ensureDefaultConversation(existingUser.id);
+                await this.ensureDefaultConversation(existingUser.id, authToken);
                 return existingUser;
             }
 
@@ -1202,7 +1197,7 @@ class Database {
             }
 
             console.log('✅ Created new user record:', newUser.id, newUser.email);
-            await this.ensureDefaultConversation(newUser.id);
+            await this.ensureDefaultConversation(newUser.id, authToken);
             return newUser;
         } catch (err) {
             console.warn('Falling back to sample user profile:', err?.message || err);

@@ -32,7 +32,7 @@ const authenticateUser = async (req, res, next) => {
 
         // Ensure user exists in our custom users table
         try {
-            await database.ensureUserExists(user);
+            await database.ensureUserExists(user, token);
         } catch (dbError) {
             console.error('Failed to ensure user exists:', dbError);
             // Continue anyway - this shouldn't block authentication
@@ -40,6 +40,7 @@ const authenticateUser = async (req, res, next) => {
 
         // Add user to request object for use in route handlers
         req.user = user;
+        req.authToken = token;
         next();
     } catch (error) {
         console.error('Auth middleware error:', error);
@@ -59,12 +60,13 @@ const optionalAuth = async (req, res, next) => {
             if (!error && user) {
                 // Ensure user exists in our custom users table
                 try {
-                    await database.ensureUserExists(user);
+                    await database.ensureUserExists(user, token);
                 } catch (dbError) {
                     console.error('Failed to ensure user exists (optional auth):', dbError);
                     // Continue anyway - this shouldn't block optional authentication
                 }
                 req.user = user;
+                req.authToken = token;
             }
         }
 
