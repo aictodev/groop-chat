@@ -42,6 +42,7 @@ const FALLBACK_USER_ID = '00000000-0000-0000-0000-000000000001';
 const API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
 const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const supabase = supabaseUrl && supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey) : null;
 
