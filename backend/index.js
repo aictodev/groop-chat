@@ -507,7 +507,8 @@ app.post('/api/chat', optionalAuth, async (req, res) => {
                 targetConversationId = newConv.id;
             }
         }
-        const maxChars = characterLimit || 280;
+        const parsedLimit = Number(characterLimit);
+        const maxChars = Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 280;
 
         // Get conversation details and context
         const conversationDetails = await database.getConversationDetails(targetConversationId, userId);
@@ -565,12 +566,12 @@ app.post('/api/chat', optionalAuth, async (req, res) => {
 
                     // Use direct conversation prompt
                     const systemPrompt = renderTemplate(DIRECT_CONVERSATION_TPL, {
-                        MAX_CHARS: maxChars,
+                        MAX_CHARS: 'Unlimited',
                         USER_PROMPT: prompt,
                         CONVERSATION_HISTORY: directConversationHistory
                     });
 
-                    const response = await callOpenRouter(targetModel, prompt, [], maxChars, systemPrompt);
+                    const response = await callOpenRouter(targetModel, prompt, [], null, systemPrompt);
                     await database.createAIMessage(response, targetModel, false, targetConversationId, aiReplyTargetId, 'direct', userId);
                     
                     res.write(`data: ${JSON.stringify({ 
@@ -726,11 +727,16 @@ async function callOpenRouter(model, prompt, history = [], maxLength = 280, syst
             console.log('[OpenRouter] debug: keyLen=', redactedLen, 'headers=', debugHeaders);
         }
 
-        const response = await axios.post(API_URL, {
+        const payload = {
             model: model,
             messages,
-            max_tokens: Math.ceil(maxLength / 4), // Rough estimation: 1 token ~ 4 chars
-        }, { headers });
+        };
+
+        if (typeof maxLength === 'number' && Number.isFinite(maxLength) && maxLength > 0) {
+            payload.max_tokens = Math.max(1, Math.ceil(maxLength / 4)); // Rough estimation: 1 token ~ 4 chars
+        }
+
+        const response = await axios.post(API_URL, payload, { headers });
 
         return response.data.choices[0].message.content.trim();
     } catch (error) {

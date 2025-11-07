@@ -1239,6 +1239,44 @@ const ProviderIcon = ({ modelId, size = 24 }) => {
     );
 };
 
+const renderTextWithModelMentions = (text) => {
+    if (!text) {
+        return '';
+    }
+
+    const mentionRegex = /@([a-zA-Z0-9][a-zA-Z0-9-_]*)/g;
+    let match;
+    let lastIndex = 0;
+    const parts = [];
+
+    while ((match = mentionRegex.exec(text)) !== null) {
+        if (match.index > lastIndex) {
+            parts.push(text.slice(lastIndex, match.index));
+        }
+
+        const aliasKey = createAliasKey(match[1]);
+        const isKnownModel = aliasKey && MODEL_ALIAS_INDEX[aliasKey];
+
+        if (isKnownModel) {
+            parts.push(
+                <strong key={`mention-${match.index}`} className="chat-message__mention">
+                    {match[0]}
+                </strong>
+            );
+        } else {
+            parts.push(match[0]);
+        }
+
+        lastIndex = match.index + match[0].length;
+    }
+
+    if (lastIndex < text.length) {
+        parts.push(text.slice(lastIndex));
+    }
+
+    return parts.length > 0 ? parts : text;
+};
+
 const ReplyPreview = ({ message, onClear }) => (
         <div className="chat-reply-preview">
             <div className="chat-message__reply-bar" />
@@ -1591,6 +1629,10 @@ const MessageBubble = ({ msg, onReply }) => {
         ? `${msg.replyTo.text.slice(0, 60)}…`
         : msg.replyTo?.text;
 
+    const renderedContent = isUser
+        ? renderTextWithModelMentions(msg.text || '')
+        : msg.text;
+
     return (
         <div className={bubbleClasses}>
             {!isUser && (
@@ -1618,7 +1660,7 @@ const MessageBubble = ({ msg, onReply }) => {
             )}
 
             <div className="space-y-2 whitespace-pre-line text-[0.95rem] leading-relaxed">
-                {msg.text}
+                {renderedContent}
             </div>
 
             <div className="chat-message__meta">
@@ -1707,7 +1749,7 @@ Constraints:
             'direct-conversation': `You are in a direct 1-on-1 conversation with the user. Offer focused, personal guidance.
 
 Constraints:
-- Max length: {{MAX_CHARS}} characters
+- Stay concise but you are not bound by a hard character limit
 - Plain text only
 - Maintain a conversational tone`,
         };

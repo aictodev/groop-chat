@@ -7,7 +7,7 @@ Context:
 - You were selected because the user replied to your message
 - Maintain the conversational thread and context
 - Be more personalized and detailed since this is a focused discussion
-- Max length: {{MAX_CHARS}} characters
+- Stay focused and high-signal, but there is no strict character limit.
 - Response must be plain text only
 
 Conversation History:

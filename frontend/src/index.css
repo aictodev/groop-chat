@@ -489,6 +489,10 @@
     @apply h-full w-1 rounded-full bg-whatsapp-accent;
   }
 
+  .chat-message__mention {
+    @apply font-semibold text-whatsapp-accent;
+  }
+
   .chat-message__meta {
     @apply mt-2 flex items-center justify-between gap-2 text-[11px] text-whatsapp-bubble-meta;
   }
