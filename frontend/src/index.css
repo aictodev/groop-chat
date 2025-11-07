@@ -280,11 +280,48 @@
   }
 
   .chat-sidebar__meta-title {
-    @apply text-sm font-medium text-whatsapp-ink truncate;
+    @apply text-sm font-medium text-whatsapp-ink truncate cursor-text;
+  }
+
+  .chat-sidebar__title-row {
+    @apply flex items-center gap-1;
+  }
+
+  .chat-sidebar__title-button {
+    @apply inline-flex w-full items-center gap-1 text-left;
+    background: transparent;
+    border: none;
+    padding: 0;
+    cursor: text;
+  }
+
+  .chat-sidebar__title-button:focus-visible {
+    outline: none;
+    border-radius: 0.5rem;
+    box-shadow: 0 0 0 2px rgba(0, 168, 132, 0.35);
+  }
+
+  .chat-sidebar__title-icon {
+    @apply h-3.5 w-3.5 text-whatsapp-ink-subtle;
+    opacity: 0;
+    transition: opacity 150ms ease;
+  }
+
+  .chat-sidebar__item:hover .chat-sidebar__title-icon,
+  .chat-sidebar__item--active .chat-sidebar__title-icon {
+    opacity: 0.85;
   }
 
   .chat-sidebar__meta-last {
     @apply mt-1 text-xs text-whatsapp-ink-soft truncate;
+  }
+
+  .chat-sidebar__rename-input {
+    @apply w-full rounded-xl border border-whatsapp-divider bg-white px-3 py-2 text-sm font-medium text-whatsapp-ink shadow-sm focus:border-whatsapp-accent focus:outline-none;
+  }
+
+  .chat-sidebar__item--renaming {
+    cursor: text;
   }
 
   .chat-sidebar__time {
@@ -359,8 +396,57 @@
     @apply text-base font-semibold text-whatsapp-ink;
   }
 
+  .chat-header__title-button {
+    background: transparent;
+    border: none;
+    padding: 0;
+    cursor: text;
+  }
+
+  .chat-header__title-button:disabled {
+    cursor: default;
+  }
+
+  .chat-header__title-button:focus-visible {
+    outline: none;
+    border-radius: 0.5rem;
+    box-shadow: 0 0 0 2px rgba(0, 168, 132, 0.35);
+  }
+
   .chat-header__status {
     @apply text-xs font-medium text-whatsapp-ink-soft;
+  }
+
+  .chat-header__title-block {
+    @apply flex flex-col gap-1;
+  }
+
+  .chat-header__title-row {
+    @apply flex items-center gap-2;
+  }
+
+  .chat-header__rename-input {
+    @apply rounded-xl border border-whatsapp-divider bg-white px-3 py-1 text-base font-semibold text-whatsapp-ink focus:border-whatsapp-accent focus:outline-none;
+  }
+
+  .chat-header__rename-button {
+    @apply inline-flex items-center gap-1 rounded-full border border-whatsapp-divider px-2.5 py-1 text-xs font-semibold text-whatsapp-ink-soft transition hover:bg-white hover:text-whatsapp-ink;
+  }
+
+  .chat-header__title-block {
+    @apply flex flex-col gap-1;
+  }
+
+  .chat-header__title-row {
+    @apply flex items-center gap-2;
+  }
+
+  .chat-header__rename-input {
+    @apply rounded-xl border border-whatsapp-divider bg-white px-3 py-1 text-base font-semibold text-whatsapp-ink focus:border-whatsapp-accent focus:outline-none;
+  }
+
+  .chat-header__rename-button {
+    @apply inline-flex items-center gap-1 rounded-full border border-whatsapp-divider px-2.5 py-1 text-xs font-semibold text-whatsapp-ink-soft transition hover:bg-white hover:text-whatsapp-ink;
   }
 
   .chat-header__rename {

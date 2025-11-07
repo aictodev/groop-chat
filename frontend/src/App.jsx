@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { MoreVertical, Menu, X } from 'lucide-react';
+import { MoreVertical, Menu, X, Pencil } from 'lucide-react';
 import { ConversationAvatar } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 
@@ -123,8 +123,12 @@ function App() {
     const [mentionSelectionIndex, setMentionSelectionIndex] = useState(0);
     const [userProfile, setUserProfile] = useState(null);
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+    const [renamingConversationId, setRenamingConversationId] = useState(null);
+    const [renameDraft, setRenameDraft] = useState('');
+    const [renameContext, setRenameContext] = useState(null);
     const chatContainerRef = useRef(null);
     const composerInputRef = useRef(null);
+    const headerRenameInputRef = useRef(null);
 
     const getConversationById = (conversationId) => {
         if (!conversationId) {
@@ -217,6 +221,27 @@ function App() {
             loadPrompts();
         }
     }, [user, currentView, loading]);
+
+    useEffect(() => {
+        if (
+            renamingConversationId === activeConversationId &&
+            renameContext === 'header' &&
+            headerRenameInputRef.current
+        ) {
+            headerRenameInputRef.current.focus();
+            headerRenameInputRef.current.select();
+        }
+    }, [renamingConversationId, renameContext, activeConversationId]);
+
+    useEffect(() => {
+        if (!renamingConversationId) {
+            return;
+        }
+        const exists = conversations.some(conversation => conversation.id === renamingConversationId);
+        if (!exists) {
+            cancelRenameConversation();
+        }
+    }, [conversations, renamingConversationId]);
 
     if (loading) {
         return (
@@ -480,22 +505,8 @@ function App() {
         }
     };
 
-    const handleRenameConversation = (conversationId) => {
-        const conversation = conversations.find(conv => conv.id === conversationId);
-        const currentTitle = conversation?.title || 'New Chat';
-        const proposed = window.prompt('Rename conversation', currentTitle);
-        if (!proposed || proposed.trim() === currentTitle.trim()) {
-            return;
-        }
-
-        const trimmed = proposed.trim();
-        if (!trimmed) {
-            return;
-        }
-
-        renameConversation(conversationId, trimmed).catch((error) => {
-            alert(error.message || 'Unable to rename conversation');
-        });
+    const handleRenameConversation = (conversationId, context = 'sidebar') => {
+        beginRenameConversation(conversationId, context);
     };
 
     const handleDeleteConversationForMe = async (conversationId) => {
@@ -517,6 +528,65 @@ function App() {
             await refreshConversationsAfterDelete();
         } catch (error) {
             alert(error.message || 'Unable to delete chat');
+        }
+    };
+
+    const beginRenameConversation = (conversationId, context = 'sidebar') => {
+        if (!conversationId) {
+            return;
+        }
+        const conversation = getConversationById(conversationId);
+        const initialTitle = conversation?.title || 'New Chat';
+        setRenamingConversationId(conversationId);
+        setRenameDraft(initialTitle);
+        setRenameContext(context);
+    };
+
+    const cancelRenameConversation = () => {
+        setRenamingConversationId(null);
+        setRenameDraft('');
+        setRenameContext(null);
+    };
+
+    const submitRenameConversation = async () => {
+        if (!renamingConversationId) {
+            return;
+        }
+        const trimmed = renameDraft.trim();
+        const currentTitle = getConversationById(renamingConversationId)?.title || 'New Chat';
+        if (!trimmed || trimmed === currentTitle) {
+            cancelRenameConversation();
+            return;
+        }
+        try {
+            await renameConversation(renamingConversationId, trimmed);
+        } catch (error) {
+            alert(error.message || 'Unable to rename conversation');
+        } finally {
+            cancelRenameConversation();
+        }
+    };
+
+    const handleRenameKeyDown = (event) => {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            submitRenameConversation();
+        } else if (event.key === 'Escape') {
+            event.preventDefault();
+            cancelRenameConversation();
+        }
+    };
+
+    const handleRenameBlur = () => {
+        if (!renamingConversationId) {
+            return;
+        }
+        const currentTitle = getConversationById(renamingConversationId)?.title || 'New Chat';
+        const trimmed = renameDraft.trim();
+        if (trimmed && trimmed !== currentTitle) {
+            submitRenameConversation();
+        } else {
+            cancelRenameConversation();
         }
     };
 
@@ -914,7 +984,13 @@ function App() {
                 resolveAvatarUrl={getConversationAvatarUrl}
                 onDeleteConversation={handleDeleteConversationForMe}
                 onDeleteConversationPermanently={handleDeleteConversationPermanently}
-                onRenameConversation={handleRenameConversation}
+                onRenameConversation={(id, context) => handleRenameConversation(id, context)}
+                renamingConversationId={renamingConversationId}
+                renameDraft={renameDraft}
+                renameContext={renameContext}
+                onRenameDraftChange={setRenameDraft}
+                handleRenameKeyDown={handleRenameKeyDown}
+                handleRenameBlur={handleRenameBlur}
                 isMobileOpen={isSidebarOpen}
                 onMobileClose={() => setIsSidebarOpen(false)}
             />
@@ -952,19 +1028,41 @@ function App() {
                                         fallbackSeed={activeConversationId || activeConversationName}
                                         className="h-12 w-12"
                                     />
-                                    <div>
-                                        <p className="chat-header__title">{activeConversationName}</p>
+                                    <div className="chat-header__title-block">
+                                        {renamingConversationId === activeConversationId && renameContext === 'header' ? (
+                                            <input
+                                                ref={headerRenameInputRef}
+                                                className="chat-header__rename-input"
+                                                value={renameDraft}
+                                                onChange={(event) => setRenameDraft(event.target.value)}
+                                                onKeyDown={handleRenameKeyDown}
+                                                onBlur={handleRenameBlur}
+                                            />
+                                        ) : (
+                                            <div className="chat-header__title-row">
+                                                <button
+                                                    type="button"
+                                                    className="chat-header__title chat-header__title-button"
+                                                    onClick={() => activeConversationId && handleRenameConversation(activeConversationId, 'header')}
+                                                    disabled={!activeConversationId}
+                                                    title="Rename conversation title"
+                                                >
+                                                    {activeConversationName}
+                                                </button>
+                                                {activeConversationId && (
+                                                    <button
+                                                        type="button"
+                                                        className="chat-header__rename-button"
+                                                        onClick={() => handleRenameConversation(activeConversationId, 'header')}
+                                                    >
+                                                        <Pencil className="h-3.5 w-3.5" />
+                                                        <span>Edit</span>
+                                                    </button>
+                                                )}
+                                            </div>
+                                        )}
                                         <p className="chat-header__status">{conversationStatus}</p>
                                     </div>
-                                    {activeConversationId && (
-                                        <button
-                                            type="button"
-                                            className="chat-header__rename"
-                                            onClick={() => handleRenameConversation(activeConversationId)}
-                                        >
-                                            Rename
-                                        </button>
-                                    )}
                                 </div>
                                 <div className="flex items-center gap-2">
                                     <ModelManager
@@ -1174,6 +1272,12 @@ const Sidebar = ({
     onDeleteConversation,
     onDeleteConversationPermanently,
     onRenameConversation,
+    renamingConversationId,
+    renameDraft,
+    renameContext,
+    onRenameDraftChange,
+    handleRenameKeyDown,
+    handleRenameBlur,
     isMobileOpen = false,
     onMobileClose,
 }) => {
@@ -1191,6 +1295,14 @@ const Sidebar = ({
             onMobileClose?.();
         }
     };
+
+    const renameInputRef = useRef(null);
+    useEffect(() => {
+        if (renamingConversationId && renameContext === 'sidebar' && renameInputRef.current) {
+            renameInputRef.current.focus();
+            renameInputRef.current.select();
+        }
+    }, [renamingConversationId, renameContext, renameDraft]);
 
     return (
         <aside className={sidebarClasses}>
@@ -1274,13 +1386,40 @@ const Sidebar = ({
 
                     const avatarUrl = resolveAvatarUrl ? resolveAvatarUrl(conversation) : null;
                     const isActive = conversation.id === activeConversationId;
+                    const isRenaming = renamingConversationId === conversation.id && renameContext === 'sidebar';
+
+                    const rowClasses = cn(
+                        'chat-sidebar__item',
+                        isActive && 'chat-sidebar__item--active',
+                        isRenaming && 'chat-sidebar__item--renaming'
+                    );
+
+                    const handleRowClick = () => {
+                        if (isRenaming) {
+                            return;
+                        }
+                        handleSelectConversation(conversation.id);
+                    };
+
+                    const handleRowKeyDown = (event) => {
+                        if (isRenaming) {
+                            return;
+                        }
+                        if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault();
+                            handleSelectConversation(conversation.id);
+                        }
+                    };
 
                     return (
-                        <button
-                            type="button"
+                        <div
+                            role="button"
+                            tabIndex={isRenaming ? -1 : 0}
                             key={conversation.id}
-                            onClick={() => handleSelectConversation(conversation.id)}
-                            className={cn('chat-sidebar__item', isActive && 'chat-sidebar__item--active')}
+                            onClick={handleRowClick}
+                            onKeyDown={handleRowKeyDown}
+                            className={rowClasses}
+                            aria-current={isActive ? 'true' : undefined}
                         >
                             <ConversationAvatar
                                 name={conversation.title || 'New Chat'}
@@ -1289,7 +1428,38 @@ const Sidebar = ({
                                 className="chat-sidebar__avatar"
                             />
                             <div className="chat-sidebar__meta">
-                                <p className="chat-sidebar__meta-title">{conversation.title || 'New Chat'}</p>
+                                {isRenaming ? (
+                                    <input
+                                        ref={renameInputRef}
+                                        className="chat-sidebar__rename-input"
+                                        value={renameDraft}
+                                        onChange={(event) => onRenameDraftChange(event.target.value)}
+                                        onKeyDown={(event) => {
+                                            event.stopPropagation();
+                                            handleRenameKeyDown(event);
+                                        }}
+                                        onBlur={handleRenameBlur}
+                                        onClick={(event) => event.stopPropagation()}
+                                    />
+                                ) : (
+                                    <div className="chat-sidebar__title-row">
+                                        <button
+                                            type="button"
+                                            className="chat-sidebar__title-button"
+                                            onClick={(event) => {
+                                                event.preventDefault();
+                                                event.stopPropagation();
+                                                onRenameConversation?.(conversation.id, 'sidebar');
+                                            }}
+                                            title="Rename chat title"
+                                        >
+                                            <span className="chat-sidebar__meta-title">
+                                                {conversation.title || 'New Chat'}
+                                            </span>
+                                            <Pencil className="chat-sidebar__title-icon" aria-hidden="true" />
+                                        </button>
+                                    </div>
+                                )}
                                 <p className="chat-sidebar__meta-last">{lastMessage}</p>
                             </div>
                             <div className="chat-sidebar__item-actions">
@@ -1312,7 +1482,7 @@ const Sidebar = ({
                                             onSelect={(event) => {
                                                 event.preventDefault();
                                                 event.stopPropagation();
-                                                onRenameConversation?.(conversation.id);
+                                                onRenameConversation?.(conversation.id, 'sidebar');
                                             }}
                                             className="flex items-center justify-between text-sm text-whatsapp-ink"
                                         >
@@ -1341,7 +1511,7 @@ const Sidebar = ({
                                     </DropdownMenuContent>
                                 </DropdownMenu>
                             </div>
-                        </button>
+                        </div>
                     );
                 })}
             </div>
