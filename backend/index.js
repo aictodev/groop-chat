@@ -301,6 +301,33 @@ app.post('/api/conversations', authenticateUser, async (req, res) => {
     }
 });
 
+app.patch('/api/conversations/:conversationId/title', authenticateUser, async (req, res) => {
+    try {
+        const { conversationId } = req.params;
+        let { title } = req.body || {};
+        const userId = req.user?.id || FALLBACK_USER_ID;
+
+        if (!title || typeof title !== 'string') {
+            return res.status(400).json({ error: 'Title is required' });
+        }
+
+        title = title.trim().slice(0, 80);
+        if (!title) {
+            return res.status(400).json({ error: 'Title cannot be empty' });
+        }
+
+        await database.assertConversationAccess(conversationId, userId);
+        await database.updateConversationTitle(conversationId, title);
+        res.json({ success: true, title });
+    } catch (error) {
+        console.error('Error renaming conversation:', error);
+        if (error?.status === 403) {
+            return res.status(403).json({ error: 'You do not have access to this conversation' });
+        }
+        res.status(500).json({ error: 'Failed to rename conversation' });
+    }
+});
+
 app.delete('/api/conversations/:conversationId', authenticateUser, async (req, res) => {
     const { conversationId } = req.params;
     const scope = req.query.scope === 'all' ? 'all' : 'me';

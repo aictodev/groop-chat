@@ -452,6 +452,52 @@ function App() {
         await loadConversations();
     };
 
+    const renameConversation = async (conversationId, newTitle) => {
+        try {
+            const response = await fetch(`${BACKEND_URL}/api/conversations/${conversationId}/title`, {
+                method: 'PATCH',
+                headers: getAuthHeaders(),
+                body: JSON.stringify({ title: newTitle })
+            });
+
+            if (!response.ok) {
+                const errorBody = await response.json().catch(() => ({}));
+                throw new Error(errorBody?.error || 'Failed to rename conversation');
+            }
+
+            setConversations(prev => prev.map(conversation => (
+                conversation.id === conversationId
+                    ? { ...conversation, title: newTitle }
+                    : conversation
+            )));
+
+            if (conversationId === activeConversationId) {
+                setConversationTitle(newTitle);
+            }
+        } catch (error) {
+            console.error('Failed to rename conversation:', error);
+            throw error;
+        }
+    };
+
+    const handleRenameConversation = (conversationId) => {
+        const conversation = conversations.find(conv => conv.id === conversationId);
+        const currentTitle = conversation?.title || 'New Chat';
+        const proposed = window.prompt('Rename conversation', currentTitle);
+        if (!proposed || proposed.trim() === currentTitle.trim()) {
+            return;
+        }
+
+        const trimmed = proposed.trim();
+        if (!trimmed) {
+            return;
+        }
+
+        renameConversation(conversationId, trimmed).catch((error) => {
+            alert(error.message || 'Unable to rename conversation');
+        });
+    };
+
     const handleDeleteConversationForMe = async (conversationId) => {
         try {
             await deleteConversation(conversationId, 'me');
@@ -868,6 +914,7 @@ function App() {
                 resolveAvatarUrl={getConversationAvatarUrl}
                 onDeleteConversation={handleDeleteConversationForMe}
                 onDeleteConversationPermanently={handleDeleteConversationPermanently}
+                onRenameConversation={handleRenameConversation}
                 isMobileOpen={isSidebarOpen}
                 onMobileClose={() => setIsSidebarOpen(false)}
             />
@@ -909,6 +956,15 @@ function App() {
                                         <p className="chat-header__title">{activeConversationName}</p>
                                         <p className="chat-header__status">{conversationStatus}</p>
                                     </div>
+                                    {activeConversationId && (
+                                        <button
+                                            type="button"
+                                            className="chat-header__rename"
+                                            onClick={() => handleRenameConversation(activeConversationId)}
+                                        >
+                                            Rename
+                                        </button>
+                                    )}
                                 </div>
                                 <div className="flex items-center gap-2">
                                     <ModelManager
@@ -1117,6 +1173,7 @@ const Sidebar = ({
     resolveAvatarUrl,
     onDeleteConversation,
     onDeleteConversationPermanently,
+    onRenameConversation,
     isMobileOpen = false,
     onMobileClose,
 }) => {
@@ -1250,7 +1307,17 @@ const Sidebar = ({
                                             <MoreVertical className="h-4 w-4" />
                                         </button>
                                     </DropdownMenuTrigger>
-                                    <DropdownMenuContent align="end" sideOffset={8} className="w-48 rounded-xl border border-whatsapp-divider bg-white p-1 shadow-panel">
+                                <DropdownMenuContent align="end" sideOffset={8} className="w-48 rounded-xl border border-whatsapp-divider bg-white p-1 shadow-panel">
+                                        <DropdownMenuItem
+                                            onSelect={(event) => {
+                                                event.preventDefault();
+                                                event.stopPropagation();
+                                                onRenameConversation?.(conversation.id);
+                                            }}
+                                            className="flex items-center justify-between text-sm text-whatsapp-ink"
+                                        >
+                                            Rename chat
+                                        </DropdownMenuItem>
                                         <DropdownMenuItem
                                             onSelect={(event) => {
                                                 event.preventDefault();
