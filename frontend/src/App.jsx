@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import './reply-styles.css';
 import { useAuth } from './AuthContext';
 import ModelManager from './components/ModelManager';
@@ -18,6 +18,13 @@ import { Input } from "@/components/ui/input";
 import { MoreVertical, Menu, X, Pencil } from 'lucide-react';
 import { ConversationAvatar } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
+import {
+    saveCachedConversations,
+    getCachedConversations,
+    saveCachedMessages,
+    getCachedMessages,
+    deleteCachedMessages,
+} from './utils/cache';
 
 // --- Configuration ---
 const MODELS = [
@@ -129,6 +136,8 @@ function App() {
     const chatContainerRef = useRef(null);
     const composerInputRef = useRef(null);
     const headerRenameInputRef = useRef(null);
+    const cacheHydratedRef = useRef(false);
+    const activeConversationIdRef = useRef(null);
 
     const getConversationById = (conversationId) => {
         if (!conversationId) {
@@ -158,6 +167,55 @@ function App() {
         }
         return headers;
     };
+
+    const warmBackend = useCallback(async (signal) => {
+        if (!BACKEND_URL) {
+            return;
+        }
+        try {
+            await fetch(`${BACKEND_URL}/health`, {
+                method: 'GET',
+                cache: 'no-store',
+                signal,
+            });
+        } catch (error) {
+            console.warn('Backend warm-up ping failed:', error.message);
+        }
+    }, []);
+
+    const hydrateFromCache = useCallback(async () => {
+        if (!user?.id) {
+            return;
+        }
+        try {
+            const cachedConversations = await getCachedConversations(user.id);
+            if (cachedConversations?.length) {
+                setConversations((prev) => (prev.length > 0 ? prev : cachedConversations));
+                const conversationId = activeConversationIdRef.current || cachedConversations[0]?.id;
+                if (!activeConversationIdRef.current && conversationId) {
+                    setActiveConversationId(conversationId);
+                }
+                if (conversationId) {
+                    const cachedMessages = await getCachedMessages(user.id, conversationId);
+                    if (cachedMessages) {
+                        setMessages(cachedMessages);
+                    }
+                }
+            }
+        } catch (error) {
+            console.warn('Cache hydration failed:', error);
+        }
+    }, [user]);
+
+    const appendMessage = useCallback((message, { persist = true } = {}) => {
+        setMessages((prev) => {
+            const nextMessages = [...prev, message];
+            if (persist && user?.id && activeConversationIdRef.current) {
+                saveCachedMessages(user.id, activeConversationIdRef.current, nextMessages);
+            }
+            return nextMessages;
+        });
+    }, [user]);
 
     // Load existing messages on component mount
     useEffect(() => {
@@ -200,6 +258,36 @@ function App() {
     useEffect(() => {
         setCurrentView('chat');
     }, []);
+
+    useEffect(() => {
+        const controller = new AbortController();
+        warmBackend(controller.signal);
+        const intervalId = setInterval(() => {
+            warmBackend();
+        }, 12 * 60 * 1000);
+        return () => {
+            controller.abort();
+            clearInterval(intervalId);
+        };
+    }, [warmBackend]);
+
+    useEffect(() => {
+        if (!user || cacheHydratedRef.current) {
+            return;
+        }
+        cacheHydratedRef.current = true;
+        hydrateFromCache();
+    }, [user, hydrateFromCache]);
+
+    useEffect(() => {
+        if (!user) {
+            cacheHydratedRef.current = false;
+        }
+    }, [user]);
+
+    useEffect(() => {
+        activeConversationIdRef.current = activeConversationId;
+    }, [activeConversationId]);
 
     useEffect(() => {
         const handleResize = () => {
@@ -290,52 +378,67 @@ function App() {
             const response = await fetch(`${BACKEND_URL}/api/conversations`, {
                 headers: getAuthHeaders()
             });
-            if (response.ok) {
-                const loadedConversations = await response.json();
-                setConversations(loadedConversations);
+            if (!response.ok) {
+                throw new Error(`Failed with status ${response.status}`);
+            }
+            const loadedConversations = await response.json();
+            setConversations(loadedConversations);
+            if (user?.id) {
+                saveCachedConversations(user.id, loadedConversations);
+            }
 
-                const targetConversationId = preferredConversationId
-                    || (loadedConversations.some(conversation => conversation.id === activeConversationId)
-                        ? activeConversationId
-                        : null);
+            const targetConversationId = preferredConversationId
+                || (loadedConversations.some(conversation => conversation.id === activeConversationId)
+                    ? activeConversationId
+                    : null);
 
-                if (targetConversationId && targetConversationId !== activeConversationId) {
-                    setActiveConversationId(targetConversationId);
-                } else if (!targetConversationId) {
-                    const fallbackId = loadedConversations.length > 0 ? loadedConversations[0].id : null;
-                    setActiveConversationId(fallbackId);
-                    if (!fallbackId) {
-                        setMessages([]);
-                    }
+            if (targetConversationId && targetConversationId !== activeConversationId) {
+                setActiveConversationId(targetConversationId);
+            } else if (!targetConversationId) {
+                const fallbackId = loadedConversations.length > 0 ? loadedConversations[0].id : null;
+                setActiveConversationId(fallbackId);
+                if (!fallbackId) {
+                    setMessages([]);
                 }
             }
         } catch (error) {
             console.error('Failed to load conversations:', error);
+            if (user?.id) {
+                const cached = await getCachedConversations(user.id);
+                if (cached?.length) {
+                    setConversations(cached);
+                    const targetConversationId = preferredConversationId
+                        || (cached.some(conversation => conversation.id === activeConversationId)
+                            ? activeConversationId
+                            : null);
+                    if (targetConversationId && targetConversationId !== activeConversationId) {
+                        setActiveConversationId(targetConversationId);
+                    } else if (!targetConversationId) {
+                        const fallbackId = cached[0]?.id || null;
+                        setActiveConversationId(fallbackId);
+                        if (!fallbackId) {
+                            setMessages([]);
+                        }
+                    }
+                }
+            }
         }
     };
 
-    const loadMessages = async () => {
-        const url = activeConversationId
-            ? `${BACKEND_URL}/api/conversations/${activeConversationId}/messages`
+    const loadMessages = async ({ prefillFromCache = true } = {}) => {
+        const targetConversationId = activeConversationId;
+        if (prefillFromCache && user?.id && targetConversationId) {
+            const cachedMessages = await getCachedMessages(user.id, targetConversationId);
+            if (cachedMessages) {
+                setMessages(cachedMessages);
+            }
+        }
+
+        const url = targetConversationId
+            ? `${BACKEND_URL}/api/conversations/${targetConversationId}/messages`
             : `${BACKEND_URL}/api/messages`;
 
         console.log('Loading messages from:', url);
-
-        const response = await fetch(url, {
-            headers: getAuthHeaders()
-        });
-
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error('Failed to load messages:', response.status, errorText);
-            const systemMessage = response.status === 403
-                ? 'You do not have access to this conversation yet.'
-                : 'We could not load messages for this conversation. Please try again.';
-            setMessages([
-                { id: 'load-error', sender: 'system', text: systemMessage, time: new Date() }
-            ]);
-            return;
-        }
 
         const normalizeMessages = (rawMessages) => {
             const processedMessages = rawMessages.map(msg => {
@@ -351,28 +454,23 @@ function App() {
                 if (msg.metadata) {
                     try {
                         const metadata = typeof msg.metadata === 'string' ? JSON.parse(msg.metadata) : msg.metadata;
-                        console.log('📖 Processing message metadata for msg', msg.id, ':', metadata);
                         if (metadata.reply_to_message_id) {
                             processed.replyToMessageId = metadata.reply_to_message_id;
-                            console.log('🔗 Found reply relationship:', processed.replyToMessageId);
                         }
                         if (metadata.conversation_mode === 'direct' || metadata.is_direct_reply) {
                             processed.isDirectReply = true;
-                            console.log('💬 Marked as direct reply');
                         }
                     } catch (metadataError) {
                         console.warn('Failed to parse message metadata:', metadataError);
                     }
                 }
 
-                console.log('Processed message:', processed);
                 return processed;
             });
 
             const messagesWithReplies = processedMessages.map(msg => {
                 if (msg.replyToMessageId) {
                     const replyToMessage = processedMessages.find(m => m.id === msg.replyToMessageId);
-                    console.log('🔍 Looking for reply target:', msg.replyToMessageId, 'found:', Boolean(replyToMessage));
                     if (replyToMessage) {
                         msg.replyTo = {
                             id: replyToMessage.id,
@@ -389,15 +487,40 @@ function App() {
         };
 
         try {
+            const response = await fetch(url, {
+                headers: getAuthHeaders()
+            });
+
+            if (!response.ok) {
+                if (user?.id && targetConversationId) {
+                    const cachedMessages = await getCachedMessages(user.id, targetConversationId);
+                    if (cachedMessages) {
+                        setMessages(cachedMessages);
+                        return;
+                    }
+                }
+                const errorText = await response.text();
+                console.error('Failed to load messages:', response.status, errorText);
+                const systemMessage = response.status === 403
+                    ? 'You do not have access to this conversation yet.'
+                    : 'We could not load messages for this conversation. Please try again.';
+                setMessages([
+                    { id: 'load-error', sender: 'system', text: systemMessage, time: new Date() }
+                ]);
+                return;
+            }
+
             const textPayload = await response.text();
             const loadedMessages = JSON.parse(textPayload);
-            console.log('Loaded messages:', loadedMessages.length);
-
             const { processedMessages, messagesWithReplies } = normalizeMessages(loadedMessages);
 
             setMessages(messagesWithReplies);
 
-            const activeConv = conversations.find(c => c.id === activeConversationId);
+            if (user?.id && targetConversationId) {
+                saveCachedMessages(user.id, targetConversationId, messagesWithReplies);
+            }
+
+            const activeConv = conversations.find(c => c.id === targetConversationId);
             if (activeConv) {
                 setConversationTitle(activeConv.title || 'AI Group Chat');
             }
@@ -408,6 +531,14 @@ function App() {
             }
         } catch (error) {
             console.error('Failed to load messages:', error);
+
+            if (user?.id && targetConversationId) {
+                const cachedMessages = await getCachedMessages(user.id, targetConversationId);
+                if (cachedMessages) {
+                    setMessages(cachedMessages);
+                    return;
+                }
+            }
 
             try {
                 const fallbackResponse = await fetch(`${BACKEND_URL}/api/messages`, {
@@ -420,7 +551,7 @@ function App() {
 
                     setMessages(messagesWithReplies);
 
-                    const activeConv = conversations.find(c => c.id === activeConversationId);
+                    const activeConv = conversations.find(c => c.id === targetConversationId);
                     if (activeConv) {
                         setConversationTitle(activeConv.title || 'AI Group Chat');
                     }
@@ -447,6 +578,10 @@ function App() {
                 if (!nextConversationId) {
                     setMessages([]);
                 }
+            }
+            if (user?.id) {
+                saveCachedConversations(user.id, updated);
+                deleteCachedMessages(user.id, conversationId);
             }
             return updated;
         });
@@ -490,11 +625,17 @@ function App() {
                 throw new Error(errorBody?.error || 'Failed to rename conversation');
             }
 
-            setConversations(prev => prev.map(conversation => (
-                conversation.id === conversationId
-                    ? { ...conversation, title: newTitle }
-                    : conversation
-            )));
+            setConversations(prev => {
+                const updated = prev.map(conversation => (
+                    conversation.id === conversationId
+                        ? { ...conversation, title: newTitle }
+                        : conversation
+                ));
+                if (user?.id) {
+                    saveCachedConversations(user.id, updated);
+                }
+                return updated;
+            });
 
             if (conversationId === activeConversationId) {
                 setConversationTitle(newTitle);
@@ -669,7 +810,7 @@ function App() {
                     time: new Date(),
                     isDirectReply: data.isDirectReply || false
                 };
-                setMessages(prev => [...prev, aiMessage]);
+                appendMessage(aiMessage);
 
                 if (data.isDirectReply) {
                     setReplyToMessage(null);
@@ -688,11 +829,11 @@ function App() {
             case 'error': {
                 setTypingModel(null);
                 setIsLoading(false);
-                setMessages(prev => [...prev, {
+                appendMessage({
                     sender: 'system',
                     text: `Error: ${data.message}`,
                     time: new Date()
-                }]);
+                }, { persist: false });
                 break;
             }
         }
@@ -826,7 +967,7 @@ function App() {
             time: new Date(),
             replyTo: replyToMessage
         };
-        setMessages(prev => [...prev, userMessage]);
+        appendMessage(userMessage);
 
         // Clear reply after sending
         if (replyToMessage) {
@@ -879,12 +1020,12 @@ function App() {
             console.error("Failed to connect to backend:", error);
             setIsLoading(false);
             setTypingModel(null);
-            setMessages(prev => [...prev, { 
+            appendMessage({ 
                 id: Date.now() + Math.random(),
                 sender: 'system', 
                 text: `Error: ${error.message}`, 
                 time: new Date() 
-            }]);
+            }, { persist: false });
         }
     };
 
@@ -961,7 +1102,10 @@ function App() {
         : 'Online';
 
     const handleSelectConversation = (conversationId) => {
-        setActiveConversationId(conversationId);
+        if (conversationId && conversationId !== activeConversationId) {
+            setMessages([]);
+            setActiveConversationId(conversationId);
+        }
         setIsSidebarOpen(false);
     };
 
