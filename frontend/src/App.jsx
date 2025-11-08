@@ -1240,7 +1240,7 @@ function App() {
                                             onClear={clearReply}
                                         />
                                     )}
-                                    <div className="flex items-start gap-3">
+                                    <div className="chat-composer__context">
                                         {conversationMode === 'direct' && (
                                             <span className="rounded-full bg-whatsapp-accent-soft px-3 py-1 text-xs font-semibold text-whatsapp-ink-soft">
                                                 Direct with {replyToMessage?.model || 'model'}
@@ -1251,7 +1251,7 @@ function App() {
                                                 Direct call: {mentionTarget.name}
                                             </span>
                                         )}
-                                        <div className="relative w-full">
+                                        <div className="chat-composer__field">
                                             <input
                                                 type="text"
                                                 value={input}

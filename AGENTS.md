@@ -37,3 +37,9 @@
 - Conversation management exposes `DELETE /api/conversations/:id?scope=me|all`. `scope=me` just removes the current user from `conversation_participants`; `scope=all` hard-deletes the conversation (and requires ownership).
 - The React sidebar shows a three-dot menu on each chat with *Delete for me* (soft delete) and *Delete permanently* (hard delete) actions, and it now guards against horizontal overflow.
 - Legacy conversations were backfilled to the real Supabase auth UID (`claude@codex.com`) so authenticated users only see their own history.
+
+## Agent Activity (Updated 2025-11-07 14:58 PST)
+
+- **14:57 PST · 17d4028** – Added frontend IndexedDB cache + warm-up pings so conversations/messages are available instantly while Render wakes.
+- **14:00 PST · f46403a** – Bolded single-model mentions in user bubbles and removed direct-reply character limits (frontend + backend prompt changes).
+- **09:30 PST · cfcd69f** – Enabled inline conversation title editing in both the chat header and sidebar.

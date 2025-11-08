@@ -455,6 +455,7 @@
 
   .chat-history {
     @apply flex-1 overflow-y-auto px-4 py-6;
+    padding-bottom: clamp(6rem, 12vh, 8rem);
   }
 
   .chat-history__stack {
@@ -523,6 +524,14 @@
     @apply flex items-end gap-3 border-t border-whatsapp-divider bg-whatsapp-panel px-6 py-4;
   }
 
+  .chat-composer__context {
+    @apply flex w-full flex-wrap items-start gap-3;
+  }
+
+  .chat-composer__field {
+    @apply relative w-full;
+  }
+
   .chat-composer__input {
     @apply w-full rounded-[24px] border border-transparent bg-whatsapp-surface px-4 py-2 text-sm shadow-sm transition-colors focus:border-whatsapp-accent focus:outline-none;
   }
@@ -533,6 +542,71 @@
 
   .chat-composer__input-controls {
     @apply absolute right-0 top-1/2 z-10 flex -translate-y-1/2 items-center gap-3 rounded-full bg-white shadow-sm px-3 py-1 flex-wrap;
+  }
+
+  @media (max-width: 640px) {
+    .chat-shell {
+      min-height: 100vh;
+    }
+
+    .chat-header {
+      @apply sticky top-0 z-30 px-4 py-3;
+      background-color: rgba(255, 255, 255, 0.94);
+      backdrop-filter: blur(10px);
+    }
+
+    .chat-header__info {
+      @apply gap-2;
+    }
+
+    .chat-header__title {
+      @apply text-sm;
+    }
+
+    .chat-header__status {
+      @apply text-[11px];
+    }
+
+    .chat-history {
+      @apply px-3 py-4;
+      padding-bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px));
+    }
+
+    .chat-history__stack {
+      @apply max-w-full;
+    }
+
+    .chat-message {
+      @apply max-w-full px-3 py-2 text-[0.95rem];
+      border-radius: 18px;
+    }
+
+    .chat-message__meta {
+      @apply text-[10px];
+    }
+
+    .chat-composer {
+      @apply sticky bottom-0 flex-col gap-3 border-t px-4 py-3;
+      background-color: rgba(255, 255, 255, 0.92);
+      backdrop-filter: blur(10px);
+      padding-bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));
+    }
+
+    .chat-composer__context {
+      @apply flex-col gap-2;
+    }
+
+    .chat-composer__input-controls {
+      position: static;
+      transform: none;
+      width: 100%;
+      margin-top: 0.5rem;
+      @apply justify-between bg-transparent px-0 py-0 shadow-none;
+    }
+
+    .chat-composer__input {
+      @apply text-base min-h-[48px] px-4 py-3;
+    }
   }
 
   @screen md {
