@@ -525,7 +525,11 @@
   }
 
   .chat-composer__context {
-    @apply flex w-full flex-wrap items-end gap-3;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
+    gap: 1rem;
+    width: 100%;
   }
 
   .chat-composer__field {
@@ -544,7 +548,8 @@
   }
 
   .chat-composer__actions {
-    @apply absolute right-6 top-1/2 z-10 flex -translate-y-1/2 items-center gap-3 rounded-full bg-white shadow-sm px-3 py-1;
+    @apply flex items-center gap-3 rounded-full bg-white shadow-sm px-3 py-1;
+    justify-self: end;
   }
 
   .chat-composer__limit {
@@ -612,8 +617,8 @@
     }
 
     .chat-composer__context {
-      display: block;
-      width: 100%;
+      grid-template-columns: 1fr;
+      gap: 0.75rem;
     }
 
     .chat-composer__field,
@@ -622,10 +627,9 @@
     }
 
     .chat-composer__actions {
-      position: static;
-      transform: none;
       width: 100%;
-      margin-top: 0.75rem;
+      justify-self: stretch;
+      margin-top: 0.25rem;
       @apply justify-between bg-transparent px-0 py-0 shadow-none;
     }
 
@@ -655,7 +659,7 @@
 
   @screen md {
     .chat-composer__actions {
-      @apply flex-nowrap;
+      justify-self: flex-end;
     }
   }
 
