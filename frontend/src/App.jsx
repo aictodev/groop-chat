@@ -1286,28 +1286,6 @@ function App() {
                                                 disabled={isLoading}
                                                 aria-label="Message input"
                                             />
-                                            <div className="chat-composer__input-controls">
-                                                <label className="chat-composer__limit">
-                                                    <Gauge className="chat-composer__limit-icon" aria-hidden="true" />
-                                                    <span className="chat-composer__limit-text">Limit</span>
-                                                    <input
-                                                        type="number"
-                                                        min="50"
-                                                        max="2000"
-                                                        value={characterLimit}
-                                                        onChange={(e) => setCharacterLimit(parseInt(e.target.value, 10) || 280)}
-                                                        className="w-20 rounded-md border border-whatsapp-divider bg-white/90 px-2 py-1 text-xs text-whatsapp-ink focus:border-whatsapp-accent focus:outline-none"
-                                                    />
-                                                </label>
-                                                <Button
-                                                    variant="whatsapp-icon"
-                                                    size="whatsapp-icon"
-                                                    onClick={handleSend}
-                                                    disabled={isLoading || !input.trim()}
-                                                >
-                                                    <SendIcon />
-                                                </Button>
-                                            </div>
                                             {isMentionMenuOpen && mentionSuggestions.length > 0 && (
                                                 <div className="absolute bottom-[calc(100%+0.5rem)] left-0 z-20 max-h-60 w-full overflow-y-auto rounded-2xl border border-whatsapp-divider bg-white shadow-panel">
                                                     {mentionSuggestions.map((model, index) => {
@@ -1330,6 +1308,29 @@ function App() {
                                                     })}
                                                 </div>
                                             )}
+                                        </div>
+                                        <div className="chat-composer__actions">
+                                            <label className="chat-composer__limit">
+                                                <Gauge className="chat-composer__limit-icon" aria-hidden="true" />
+                                                <span className="chat-composer__limit-text">Limit</span>
+                                                <input
+                                                    type="number"
+                                                    min="50"
+                                                    max="2000"
+                                                    value={characterLimit}
+                                                    onChange={(e) => setCharacterLimit(parseInt(e.target.value, 10) || 280)}
+                                                    className="w-20 rounded-md border border-whatsapp-divider bg-white/90 px-2 py-1 text-xs text-whatsapp-ink focus:border-whatsapp-accent focus:outline-none"
+                                                />
+                                            </label>
+                                            <Button
+                                                variant="whatsapp-icon"
+                                                size="whatsapp-icon"
+                                                onClick={handleSend}
+                                                disabled={isLoading || !input.trim()}
+                                                className="chat-composer__send"
+                                            >
+                                                <SendIcon />
+                                            </Button>
                                         </div>
                                     </div>
                                 </div>
