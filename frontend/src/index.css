@@ -525,7 +525,7 @@
   }
 
   .chat-composer__context {
-    @apply flex w-full flex-wrap items-start gap-3;
+    @apply flex w-full flex-wrap items-end gap-3;
   }
 
   .chat-composer__field {
@@ -612,7 +612,7 @@
     }
 
     .chat-composer__context {
-      @apply flex-col gap-2;
+      @apply flex-col gap-2 items-stretch;
     }
 
     .chat-composer__input-controls {
