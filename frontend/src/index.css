@@ -563,7 +563,7 @@
     @apply uppercase tracking-wide;
   }
 
-  @media (max-width: 640px) {
+  @media (max-width: 860px) {
     .chat-shell {
       min-height: 100vh;
     }
@@ -612,7 +612,13 @@
     }
 
     .chat-composer__context {
-      @apply flex-col gap-2 items-stretch;
+      display: block;
+      width: 100%;
+    }
+
+    .chat-composer__field,
+    .chat-composer__field > * {
+      width: 100%;
     }
 
     .chat-composer__input-controls {
@@ -642,8 +648,8 @@
     }
 
     .chat-composer__limit input {
-      @apply w-20 border border-whatsapp-divider rounded-full text-center bg-white/90;
-      height: 34px;
+      @apply w-16 border border-whatsapp-divider rounded-full text-center bg-white/90;
+      height: 32px;
     }
   }
 
