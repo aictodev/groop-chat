@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { MoreVertical, Menu, X, Pencil } from 'lucide-react';
+import { MoreVertical, Menu, X, Pencil, Gauge } from 'lucide-react';
 import { ConversationAvatar } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import {
@@ -37,6 +37,7 @@ const MODELS = [
     { id: "moonshotai/kimi-k2", name: "Kimi K2" },
 ];
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:7001';
+const BASE_COMPOSER_HEIGHT = 48;
 
 const createAliasKey = (value) => value.toLowerCase().replace(/[^a-z0-9]/g, '');
 
@@ -138,6 +139,16 @@ function App() {
     const headerRenameInputRef = useRef(null);
     const cacheHydratedRef = useRef(false);
     const activeConversationIdRef = useRef(null);
+
+    const adjustComposerHeight = useCallback(() => {
+        const inputEl = composerInputRef.current;
+        if (!inputEl) {
+            return;
+        }
+        inputEl.style.height = 'auto';
+        const maxHeight = 160;
+        inputEl.style.height = `${Math.min(inputEl.scrollHeight, maxHeight)}px`;
+    }, []);
 
     const getConversationById = (conversationId) => {
         if (!conversationId) {
@@ -258,6 +269,10 @@ function App() {
     useEffect(() => {
         setCurrentView('chat');
     }, []);
+
+    useEffect(() => {
+        adjustComposerHeight();
+    }, [adjustComposerHeight]);
 
     useEffect(() => {
         const controller = new AbortController();
@@ -851,6 +866,7 @@ function App() {
         const caretPosition = event.target.selectionStart ?? value.length;
 
         setInput(value);
+        requestAnimationFrame(adjustComposerHeight);
 
         if (conversationMode === 'direct') {
             setMentionTarget(null);
@@ -899,6 +915,7 @@ function App() {
         const nextValue = `${before}${replacement}${after}`;
 
         setInput(nextValue);
+        requestAnimationFrame(adjustComposerHeight);
         setMentionTarget({ id: modelMeta.id, name: modelMeta.name, mentionToken: replacement.trim() });
         resetMentionState();
 
@@ -954,6 +971,12 @@ function App() {
             : selectedModels;
         
         setInput('');
+        requestAnimationFrame(() => {
+            const inputEl = composerInputRef.current;
+            if (inputEl) {
+                inputEl.style.height = '48px';
+            }
+        });
         setMentionTarget(null);
         resetMentionState();
         setIsLoading(true);
@@ -1252,8 +1275,8 @@ function App() {
                                             </span>
                                         )}
                                         <div className="chat-composer__field">
-                                            <input
-                                                type="text"
+                                            <textarea
+                                                rows={1}
                                                 value={input}
                                                 ref={composerInputRef}
                                                 onChange={handleInputChange}
@@ -1261,10 +1284,12 @@ function App() {
                                                 placeholder={replyToMessage ? `Replying to ${replyToMessage.model || 'User'}...` : 'Type a message'}
                                                 className="chat-composer__input"
                                                 disabled={isLoading}
+                                                aria-label="Message input"
                                             />
                                             <div className="chat-composer__input-controls">
-                                                <label className="flex items-center gap-2 text-xs text-whatsapp-ink-soft">
-                                                    Limit
+                                                <label className="chat-composer__limit">
+                                                    <Gauge className="chat-composer__limit-icon" aria-hidden="true" />
+                                                    <span className="chat-composer__limit-text">Limit</span>
                                                     <input
                                                         type="number"
                                                         min="50"

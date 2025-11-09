@@ -533,7 +533,10 @@
   }
 
   .chat-composer__input {
-    @apply w-full rounded-[24px] border border-transparent bg-whatsapp-surface px-4 py-2 text-sm shadow-sm transition-colors focus:border-whatsapp-accent focus:outline-none;
+    @apply w-full rounded-[24px] border border-transparent bg-whatsapp-surface px-4 py-3 text-base shadow-sm transition-colors focus:border-whatsapp-accent focus:outline-none;
+    min-height: 48px;
+    resize: none;
+    line-height: 1.35;
   }
 
   .chat-composer__input::placeholder {
@@ -542,6 +545,22 @@
 
   .chat-composer__input-controls {
     @apply absolute right-0 top-1/2 z-10 flex -translate-y-1/2 items-center gap-3 rounded-full bg-white shadow-sm px-3 py-1 flex-wrap;
+  }
+
+  .chat-composer__limit {
+    @apply flex items-center gap-2 rounded-full border border-whatsapp-divider bg-white px-3 py-1 text-xs font-semibold text-whatsapp-ink-soft;
+  }
+
+  .chat-composer__limit input {
+    @apply w-20 rounded-md border border-whatsapp-divider bg-white/90 px-2 py-1 text-xs text-whatsapp-ink focus:border-whatsapp-accent focus:outline-none;
+  }
+
+  .chat-composer__limit-icon {
+    display: none;
+  }
+
+  .chat-composer__limit-text {
+    @apply uppercase tracking-wide;
   }
 
   @media (max-width: 640px) {
@@ -606,6 +625,25 @@
 
     .chat-composer__input {
       @apply text-base min-h-[48px] px-4 py-3;
+    }
+
+    .chat-composer__limit {
+      @apply w-auto border-transparent bg-transparent px-2 py-0;
+      gap: 0.5rem;
+    }
+
+    .chat-composer__limit-icon {
+      display: inline-flex;
+      @apply h-4 w-4 text-whatsapp-ink-subtle;
+    }
+
+    .chat-composer__limit-text {
+      @apply hidden;
+    }
+
+    .chat-composer__limit input {
+      @apply w-16 border border-whatsapp-divider rounded-full text-center bg-white/80;
+      height: 32px;
     }
   }
 
