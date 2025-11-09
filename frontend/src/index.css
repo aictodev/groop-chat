@@ -540,11 +540,11 @@
   }
 
   .chat-composer__input::placeholder {
-    @apply text-whatsapp-ink-soft;
+    color: color-mix(in srgb, var(--whatsapp-ink) 40%, transparent);
   }
 
   .chat-composer__input-controls {
-    @apply absolute right-0 top-1/2 z-10 flex -translate-y-1/2 items-center gap-3 rounded-full bg-white shadow-sm px-3 py-1 flex-wrap;
+    @apply absolute right-0 top-1/2 z-10 flex -translate-y-1/2 items-center gap-3 rounded-full bg-white shadow-sm px-3 py-1 flex-nowrap;
   }
 
   .chat-composer__limit {
@@ -619,7 +619,7 @@
       position: static;
       transform: none;
       width: 100%;
-      margin-top: 0.5rem;
+      margin-top: 0.75rem;
       @apply justify-between bg-transparent px-0 py-0 shadow-none;
     }
 
@@ -642,8 +642,8 @@
     }
 
     .chat-composer__limit input {
-      @apply w-16 border border-whatsapp-divider rounded-full text-center bg-white/80;
-      height: 32px;
+      @apply w-20 border border-whatsapp-divider rounded-full text-center bg-white/90;
+      height: 34px;
     }
   }
 
