@@ -54,7 +54,8 @@ const ALL_MODELS = [
     "meta-llama/llama-3-8b-instruct",
     "deepseek/deepseek-chat",
     "qwen/qwen-2.5-7b-instruct",
-    "moonshotai/kimi-k2"
+    "moonshotai/kimi-k2",
+    "x-ai/grok-4.1-fast:free"
 ];
 
 // A simple mapping for model names and avatars for the frontend
@@ -65,7 +66,8 @@ const MODEL_DETAILS = {
     "meta-llama/llama-3-8b-instruct": { name: "Llama", avatar: " L " },
     "deepseek/deepseek-chat": { name: "DeepSeek Chat", avatar: " D " },
     "qwen/qwen-2.5-7b-instruct": { name: "Qwen", avatar: " Q " },
-    "moonshotai/kimi-k2": { name: "Kimi K2", avatar: " K " }
+    "moonshotai/kimi-k2": { name: "Kimi K2", avatar: " K " },
+    "x-ai/grok-4.1-fast:free": { name: "Grok", avatar: " X " }
 };
 
 // --- Load prompt templates ---
@@ -264,7 +266,7 @@ app.get('/api/messages', optionalAuth, async (req, res) => {
 
             return baseMsg;
         });
-        
+
         res.json(transformedMessages);
     } catch (error) {
         console.error('Error fetching messages:', error);
@@ -381,7 +383,7 @@ app.get('/api/conversations/:conversationId/messages', optionalAuth, async (req,
 
             return baseMsg;
         });
-        
+
         res.json(transformedMessages);
     } catch (error) {
         console.error('Error fetching conversation messages:', error);
@@ -397,25 +399,25 @@ app.get('/api/conversations/:conversationId/messages', optionalAuth, async (req,
  */
 app.post('/api/generate-title', async (req, res) => {
     const { conversationId } = req.body;
-    
+
     try {
         if (!conversationId) {
             return res.json({ title: 'New Chat' });
         }
 
         const messages = await database.getMessages(conversationId);
-        
+
         // Get the first few user messages to generate a title
         const userMessages = messages
             .filter(msg => msg.sender_type === 'user')
             .slice(0, 3)
             .map(msg => msg.content)
             .join(' ');
-        
+
         if (!userMessages.trim()) {
             return res.json({ title: 'New Chat' });
         }
-        
+
         // Use Gemini 2.0 Flash to generate a concise summary title
         const titlePrompt = `Create a brief, descriptive 2-4 word summary title for this conversation topic: "${userMessages}". 
 
@@ -425,22 +427,22 @@ Examples:
 - "How to cook pasta?" → "Pasta Cooking Tips"
 
 Return ONLY the title, no quotes or extra text.`;
-        
+
         const title = await callOpenRouter('google/gemini-2.5-flash', titlePrompt, [], 60, 'You are a helpful assistant that creates concise conversation titles.');
-        
+
         // Clean up the title (remove quotes, limit length, capitalize properly)
         let cleanTitle = title.replace(/['"]/g, '').trim().substring(0, 35);
-        
+
         // Capitalize first letter of each word
-        cleanTitle = cleanTitle.replace(/\w\S*/g, (txt) => 
+        cleanTitle = cleanTitle.replace(/\w\S*/g, (txt) =>
             txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase()
         );
-        
+
         // Update the conversation title in database
         if (conversationId && cleanTitle !== 'New Chat') {
             await database.updateConversationTitle(conversationId, cleanTitle);
         }
-        
+
         res.json({ title: cleanTitle || 'New Chat' });
     } catch (error) {
         console.error('Error generating title:', error);
@@ -537,7 +539,7 @@ app.post('/api/chat', optionalAuth, async (req, res) => {
                 if (!replyMessage || !replyMessage.ai_model_id) {
                     conversationMode = 'group';
                 }
-                
+
                 if (conversationMode === 'direct' && replyMessage) {
                     const targetModel = replyMessage.ai_model_id;
                     const modelDetails = MODEL_DETAILS[targetModel] || { name: targetModel, avatar: '?' };
@@ -549,8 +551,8 @@ app.post('/api/chat', optionalAuth, async (req, res) => {
                     }
 
                     // Send typing indicator
-                    res.write(`data: ${JSON.stringify({ 
-                        type: 'typing', 
+                    res.write(`data: ${JSON.stringify({
+                        type: 'typing',
                         model: modelDetails.name,
                         avatar: modelDetails.avatar
                     })}\n\n`);
@@ -559,8 +561,8 @@ app.post('/api/chat', optionalAuth, async (req, res) => {
                     const directConversationHistory = conversationContext
                         .filter(msg => msg.sender_type === 'user' || msg.ai_model_id === targetModel)
                         .map(msg => {
-                            const sender = msg.sender_type === 'user' ? 'User' : 
-                                         msg.sender_type === 'ai' ? (msg.ai_models?.name || targetModel) : 'System';
+                            const sender = msg.sender_type === 'user' ? 'User' :
+                                msg.sender_type === 'ai' ? (msg.ai_models?.name || targetModel) : 'System';
                             return `${sender}: "${msg.content}"`;
                         }).join('\n');
 
@@ -573,15 +575,15 @@ app.post('/api/chat', optionalAuth, async (req, res) => {
 
                     const response = await callOpenRouter(targetModel, prompt, [], null, systemPrompt);
                     await database.createAIMessage(response, targetModel, false, targetConversationId, aiReplyTargetId, 'direct', userId);
-                    
-                    res.write(`data: ${JSON.stringify({ 
+
+                    res.write(`data: ${JSON.stringify({
                         type: 'message',
-                        model: modelDetails.name, 
-                        avatar: modelDetails.avatar, 
+                        model: modelDetails.name,
+                        avatar: modelDetails.avatar,
                         text: response,
                         isDirectReply: true
                     })}\n\n`);
-                    
+
                     // Send completion signal and end for direct replies
                     res.write(`data: ${JSON.stringify({ type: 'complete' })}\n\n`);
                     res.end();
@@ -591,21 +593,21 @@ app.post('/api/chat', optionalAuth, async (req, res) => {
                 conversationMode = 'group';
             }
         }
-        
+
         // Handle group conversation mode (fallback or initial)  
         {
             // Handle group conversation mode
             const chatHistory = [];
             const isOngoingThread = conversationContext.length > 1; // Has previous messages
-            
+
             // Update conversation mode and thread stage
             const threadStage = isOngoingThread ? 'ongoing' : 'initial';
             await database.updateConversationMode(targetConversationId, 'group', null, threadStage);
 
             // Format conversation history for context
             const conversationHistory = conversationContext.map(msg => {
-                const sender = msg.sender_type === 'user' ? 'User' : 
-                             msg.sender_type === 'ai' ? (msg.ai_models?.name || 'AI') : 'System';
+                const sender = msg.sender_type === 'user' ? 'User' :
+                    msg.sender_type === 'ai' ? (msg.ai_models?.name || 'AI') : 'System';
                 return `${sender}: "${msg.content}"`;
             }).join('\n');
 
@@ -632,7 +634,7 @@ app.post('/api/chat', optionalAuth, async (req, res) => {
             // First model response
             const firstResponderResponse = await callOpenRouter(firstModel, prompt, [], maxChars, systemPrompt);
             await database.createAIMessage(firstResponderResponse, firstModel, true, targetConversationId, aiReplyTargetId, 'group', userId);
-            
+
             res.write(`data: ${JSON.stringify({
                 type: 'message',
                 model: firstModelDetails.name,
@@ -646,10 +648,10 @@ app.post('/api/chat', optionalAuth, async (req, res) => {
             const remainingModels = modelsToUse.slice(1);
             for (const model of remainingModels) {
                 const modelDetails = MODEL_DETAILS[model] || { name: model, avatar: '?' };
-                
+
                 // Send typing indicator
-                res.write(`data: ${JSON.stringify({ 
-                    type: 'typing', 
+                res.write(`data: ${JSON.stringify({
+                    type: 'typing',
                     model: modelDetails.name,
                     avatar: modelDetails.avatar
                 })}\n\n`);
@@ -668,12 +670,12 @@ app.post('/api/chat', optionalAuth, async (req, res) => {
 
                 const newResponse = await callOpenRouter(model, uniquenessPrompt, chatHistory, maxChars, systemPrompt);
                 await database.createAIMessage(newResponse, model, false, targetConversationId, aiReplyTargetId, 'group', userId);
-                
-                res.write(`data: ${JSON.stringify({ 
+
+                res.write(`data: ${JSON.stringify({
                     type: 'message',
-                    model: modelDetails.name, 
-                    avatar: modelDetails.avatar, 
-                    text: newResponse 
+                    model: modelDetails.name,
+                    avatar: modelDetails.avatar,
+                    text: newResponse
                 })}\n\n`);
 
                 chatHistory.push({ role: 'assistant', content: newResponse });
@@ -688,9 +690,9 @@ app.post('/api/chat', optionalAuth, async (req, res) => {
         const accessDenied = error?.status === 403;
         console.error('Error processing chat:', error.response ? error.response.data : error.message);
 
-        res.write(`data: ${JSON.stringify({ 
-            type: 'error', 
-            message: accessDenied ? 'You do not have access to this conversation.' : error.message 
+        res.write(`data: ${JSON.stringify({
+            type: 'error',
+            message: accessDenied ? 'You do not have access to this conversation.' : error.message
         })}\n\n`);
         res.end();
     }
@@ -1058,7 +1060,7 @@ async function createPlaceholderImage(prompt, filePath) {
 const PORT = process.env.PORT || 7001;
 app.listen(PORT, async () => {
     console.log(`Server is running on port ${PORT}`);
-    
+
     // Test database connection on startup
     const dbHealth = await database.healthCheck();
     if (dbHealth) {

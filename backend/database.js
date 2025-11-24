@@ -26,7 +26,8 @@ const SAMPLE_MODEL_MAP = {
     'meta-llama/llama-3-8b-instruct': { name: 'Llama', avatar: ' L ' },
     'deepseek/deepseek-chat': { name: 'DeepSeek Chat', avatar: ' D ' },
     'qwen/qwen-2.5-7b-instruct': { name: 'Qwen', avatar: ' Q ' },
-    'moonshotai/kimi-k2': { name: 'Kimi K2', avatar: ' K ' }
+    'moonshotai/kimi-k2': { name: 'Kimi K2', avatar: ' K ' },
+    'x-ai/grok-4.1-fast:free': { name: 'Grok', avatar: ' X ' }
 };
 
 const DEFAULT_MODEL_IDS = Object.keys(SAMPLE_MODEL_MAP);
@@ -122,12 +123,12 @@ class Database {
             .select('*')
             .eq('id', '00000000-0000-0000-0000-000000000002')
             .single();
-        
+
         if (error) {
             console.error('Error fetching default conversation:', error);
             throw new Error('Failed to fetch default conversation');
         }
-        
+
         return data;
     }
 
@@ -242,7 +243,7 @@ class Database {
             content: content,
             created_at: new Date().toISOString()
         };
-        
+
         // Store reply info in metadata field if it exists, otherwise skip
         const hasValidReplyId = replyToMessageId && replyToMessageId !== 'null' && replyToMessageId !== 'undefined';
         if (hasValidReplyId || conversationMode !== 'group') {
@@ -260,18 +261,18 @@ class Database {
                 console.log('Metadata field not available, skipping reply info');
             }
         }
-        
+
         try {
             const { data, error } = await supabase
                 .from('messages')
                 .insert(insertData)
                 .select()
                 .single();
-            
+
             if (error) {
                 throw error;
             }
-            
+
             await this.updateConversationTimestamp(conversationId);
             return data;
         } catch (error) {
@@ -328,7 +329,7 @@ class Database {
             is_first_responder: isFirstResponder,
             created_at: new Date().toISOString()
         };
-        
+
         // Store reply info in metadata field if it exists, otherwise skip
         const hasValidReplyId = replyToMessageId && replyToMessageId !== 'null' && replyToMessageId !== 'undefined';
         if (hasValidReplyId || conversationMode !== 'group') {
@@ -346,7 +347,7 @@ class Database {
                 console.log('Metadata field not available, skipping reply info');
             }
         }
-        
+
         try {
             const { data, error } = await supabase
                 .from('messages')
@@ -356,11 +357,11 @@ class Database {
                     ai_models(name, avatar)
                 `)
                 .single();
-            
+
             if (error) {
                 throw error;
             }
-            
+
             await this.updateConversationTimestamp(conversationId);
             return data;
         } catch (error) {
@@ -381,12 +382,12 @@ class Database {
         try {
             const { error } = await supabase
                 .from('conversations')
-                .update({ 
+                .update({
                     last_message_at: new Date().toISOString(),
                     updated_at: new Date().toISOString()
                 })
                 .eq('id', conversationId);
-            
+
             if (error) {
                 throw error;
             }
@@ -404,12 +405,12 @@ class Database {
     async updateConversationTitle(conversationId, title) {
         const { error } = await supabase
             .from('conversations')
-            .update({ 
+            .update({
                 title: title,
                 updated_at: new Date().toISOString()
             })
             .eq('id', conversationId);
-        
+
         if (error) {
             console.error('Error updating conversation title:', error);
             throw new Error('Failed to update conversation title');
@@ -425,12 +426,12 @@ class Database {
             `)
             .eq('conversation_id', conversationId)
             .eq('is_active', true);
-        
+
         if (error) {
             console.error('Error fetching conversation AI models:', error);
             throw new Error('Failed to fetch conversation AI models');
         }
-        
+
         return data.map(item => item.ai_models);
     }
 
@@ -441,12 +442,12 @@ class Database {
             .select('*')
             .eq('id', modelId)
             .single();
-        
+
         if (error) {
             console.error('Error fetching AI model:', error);
             throw new Error('Failed to fetch AI model');
         }
-        
+
         return data;
     }
 
@@ -462,12 +463,12 @@ class Database {
             })
             .select()
             .single();
-        
+
         if (error) {
             console.error('Error creating system message:', error);
             throw new Error('Failed to create system message');
         }
-        
+
         return data;
     }
 
@@ -625,9 +626,9 @@ class Database {
                 if (participantError?.code === '23505') {
                     // unique violation is fine, means the row already exists for this user
                 } else {
-            console.error('Error adding conversation participant:', participantError);
-            throw participantError;
-        }
+                    console.error('Error adding conversation participant:', participantError);
+                    throw participantError;
+                }
             }
 
             try {
@@ -836,12 +837,12 @@ class Database {
                 .eq('conversation_id', conversationId)
                 .order('created_at', { ascending: false })
                 .limit(limit);
-            
+
             if (error) {
                 console.error('Error fetching conversation context:', error);
                 throw error;
             }
-            
+
             return (data || []).reverse();
         } catch (err) {
             if (err?.status === 403) {
@@ -872,12 +873,12 @@ class Database {
                 `)
                 .eq('id', messageId)
                 .single();
-            
+
             if (error) {
                 console.error('Error fetching message:', error);
                 throw error;
             }
-            
+
             return data;
         } catch (err) {
             const fallback = SAMPLE_MESSAGES.find(msg => msg.id === messageId);
@@ -894,13 +895,13 @@ class Database {
         const updateData = {
             updated_at: new Date().toISOString()
         };
-        
+
         try {
             const { error } = await supabase
                 .from('conversations')
                 .update(updateData)
                 .eq('id', conversationId);
-            
+
             if (error) {
                 throw error;
             }
@@ -912,7 +913,7 @@ class Database {
                 ai_model_id: null
             });
         }
-        
+
     }
 
     // Get conversation details (fallback to existing schema)
@@ -933,12 +934,12 @@ class Database {
                 `)
                 .eq('id', conversationId)
                 .single();
-            
+
             if (error) {
                 console.error('Error fetching conversation details:', error);
                 throw error;
             }
-            
+
             return {
                 ...data,
                 conversation_mode: 'group',

@@ -6,12 +6,12 @@ import ProfilePictureUpload from './components/ProfilePictureUpload';
 import EditableDisplayName from './components/EditableDisplayName';
 import Landing from './components/Landing';
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,6 +35,7 @@ const MODELS = [
     { id: "deepseek/deepseek-chat", name: "DeepSeek Chat" },
     { id: "qwen/qwen-2.5-7b-instruct", name: "Qwen" },
     { id: "moonshotai/kimi-k2", name: "Kimi K2" },
+    { id: "x-ai/grok-4.1-fast:free", name: "Grok" },
 ];
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:7001';
 const BASE_COMPOSER_HEIGHT = 48;
@@ -781,18 +782,18 @@ function App() {
     };
 
     const handleReplyToMessage = (message) => {
-        
+
         // Don't allow replies to temporary IDs or invalid UUID formats (not stored in database)
         const messageId = message.id && message.id.toString();
         const isValidUUID = messageId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(messageId);
         const isTempId = messageId && messageId.startsWith('temp_');
-        
+
         if (!isValidUUID || isTempId) {
             setReplyToMessage(null);
             setConversationMode('group');
             return;
         }
-        
+
         setReplyToMessage(message);
         if (message.sender === 'ai') {
             setConversationMode('direct');
@@ -969,7 +970,7 @@ function App() {
         const modelsForRequest = mentionOverride
             ? [mentionOverride.id]
             : selectedModels;
-        
+
         setInput('');
         requestAnimationFrame(() => {
             const inputEl = composerInputRef.current;
@@ -983,10 +984,10 @@ function App() {
         setTypingModel(null);
 
         // Add user message immediately with reply context
-        const userMessage = { 
+        const userMessage = {
             id: Date.now() + Math.random(), // Temporary ID
-            sender: 'user', 
-            text: promptToSend, 
+            sender: 'user',
+            text: promptToSend,
             time: new Date(),
             replyTo: replyToMessage
         };
@@ -1043,11 +1044,11 @@ function App() {
             console.error("Failed to connect to backend:", error);
             setIsLoading(false);
             setTypingModel(null);
-            appendMessage({ 
+            appendMessage({
                 id: Date.now() + Math.random(),
-                sender: 'system', 
-                text: `Error: ${error.message}`, 
-                time: new Date() 
+                sender: 'system',
+                text: `Error: ${error.message}`,
+                time: new Date()
             }, { persist: false });
         }
     };
@@ -1348,7 +1349,7 @@ function App() {
 // Provider icon component with fallback
 const ProviderIcon = ({ modelId, size = 24 }) => {
     const [iconError, setIconError] = useState(false);
-    
+
     // Map model IDs to provider names
     const getProviderFromModel = (modelId) => {
         if (modelId.startsWith('google/')) return 'google';
@@ -1376,9 +1377,9 @@ const ProviderIcon = ({ modelId, size = 24 }) => {
             'qwen': '#EF4444',
             'default': '#6B7280'
         };
-        
+
         return (
-            <div 
+            <div
                 className="provider-icon fallback"
                 style={{
                     width: size,
@@ -1399,7 +1400,7 @@ const ProviderIcon = ({ modelId, size = 24 }) => {
     }
 
     return (
-        <img 
+        <img
             src={iconPath}
             alt={`${provider} icon`}
             className="provider-icon"
@@ -1448,24 +1449,24 @@ const renderTextWithModelMentions = (text) => {
 };
 
 const ReplyPreview = ({ message, onClear }) => (
-        <div className="chat-reply-preview">
-            <div className="chat-message__reply-bar" />
-            <div className="min-w-0 flex-1 chat-message__reply-text">
-                <p className="text-xs font-semibold text-whatsapp-ink">
-                    {message.model || 'You'}
-                </p>
-                <p className="text-xs text-whatsapp-ink-soft">
-                    {message.text}
-                </p>
-            </div>
-            <button
-                type="button"
-                onClick={onClear}
-                className="text-xs font-semibold text-whatsapp-ink-subtle transition hover:text-whatsapp-ink"
-            >
-                Cancel
-            </button>
+    <div className="chat-reply-preview">
+        <div className="chat-message__reply-bar" />
+        <div className="min-w-0 flex-1 chat-message__reply-text">
+            <p className="text-xs font-semibold text-whatsapp-ink">
+                {message.model || 'You'}
+            </p>
+            <p className="text-xs text-whatsapp-ink-soft">
+                {message.text}
+            </p>
         </div>
+        <button
+            type="button"
+            onClick={onClear}
+            className="text-xs font-semibold text-whatsapp-ink-subtle transition hover:text-whatsapp-ink"
+        >
+            Cancel
+        </button>
+    </div>
 );
 
 const Sidebar = ({
@@ -1685,7 +1686,7 @@ const Sidebar = ({
                                             <MoreVertical className="h-4 w-4" />
                                         </button>
                                     </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end" sideOffset={8} className="w-48 rounded-xl border border-whatsapp-divider bg-white p-1 shadow-panel">
+                                    <DropdownMenuContent align="end" sideOffset={8} className="w-48 rounded-xl border border-whatsapp-divider bg-white p-1 shadow-panel">
                                         <DropdownMenuItem
                                             onSelect={(event) => {
                                                 event.preventDefault();
@@ -1742,10 +1743,10 @@ const ChatHeader = () => (
         </div>
         <div className="flex items-center gap-4 opacity-80">
             <HeaderIcon title="Search">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5"><path d="M21.53 20.47l-3.66-3.66a8.5 8.5 0 10-1.06 1.06l3.66 3.66a.75.75 0 101.06-1.06zM10.5 18a7.5 7.5 0 110-15 7.5 7.5 0 010 15z"/></svg>
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5"><path d="M21.53 20.47l-3.66-3.66a8.5 8.5 0 10-1.06 1.06l3.66 3.66a.75.75 0 101.06-1.06zM10.5 18a7.5 7.5 0 110-15 7.5 7.5 0 010 15z" /></svg>
             </HeaderIcon>
             <HeaderIcon title="Menu">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5"><path d="M4 6h16v2H4V6zm0 5h16v2H4v-2zm0 5h16v2H4v-2z"/></svg>
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5"><path d="M4 6h16v2H4V6zm0 5h16v2H4v-2zm0 5h16v2H4v-2z" /></svg>
             </HeaderIcon>
         </div>
     </header>
