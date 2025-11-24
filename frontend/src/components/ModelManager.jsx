@@ -34,6 +34,7 @@ const MODEL_PROVIDER_MAP = {
   'deepseek/deepseek-chat': 'deepseek',
   'qwen/qwen-2.5-7b-instruct': 'qwen',
   'moonshotai/kimi-k2': 'moonshot',
+  'x-ai/grok-4.1-fast:free': 'xai',
 };
 
 const MODELS = [
@@ -44,6 +45,7 @@ const MODELS = [
   { id: "deepseek/deepseek-chat", name: "DeepSeek Chat" },
   { id: "qwen/qwen-2.5-7b-instruct", name: "Qwen" },
   { id: "moonshotai/kimi-k2", name: "Kimi K2" },
+  { id: "x-ai/grok-4.1-fast:free", name: "Grok" },
 ];
 
 const BADGE_SIZES = {
