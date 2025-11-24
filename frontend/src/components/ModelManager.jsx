@@ -8,6 +8,23 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { Menu, X, GripVertical } from 'lucide-react';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragOverlay,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 const MODEL_PROVIDER_MAP = {
   'google/gemini-2.5-flash': 'google',
@@ -40,32 +57,106 @@ const BADGE_SIZES = {
   },
 };
 
+const SortableModelItem = ({ modelId, index, renderModelBadge, getModelConfig, toggleModel }) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: modelId });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 50 : 'auto',
+    position: 'relative',
+    opacity: isDragging ? 0.3 : 1,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`flex items-center justify-between rounded-xl border px-3 py-2 transition-all border-transparent bg-whatsapp-accent-soft/70 hover:border-whatsapp-accent`}
+    >
+      <div className="flex flex-1 items-center gap-2">
+        <div
+          {...attributes}
+          {...listeners}
+          className="cursor-grab touch-none p-1 -ml-1 hover:bg-black/5 rounded"
+        >
+          <GripVertical className="h-4 w-4 text-whatsapp-ink-subtle" />
+        </div>
+        {renderModelBadge(modelId)}
+        <span className="text-sm font-medium text-whatsapp-ink">
+          {getModelConfig(modelId).name}
+        </span>
+      </div>
+      <div className="flex items-center gap-3 text-xs text-whatsapp-ink-subtle">
+        <span className="font-medium">#{index + 1}</span>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => toggleModel(modelId)}
+          className="h-7 w-7 rounded-full text-red-500 hover:bg-red-100"
+        >
+          <X className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+    </div>
+  );
+};
+
+// Separate component for the drag overlay to keep it clean
+const DragOverlayItem = ({ modelId, renderModelBadge, getModelConfig }) => {
+  return (
+    <div className="flex items-center justify-between rounded-xl border border-whatsapp-accent bg-white px-3 py-2 shadow-xl cursor-grabbing opacity-90 scale-105">
+      <div className="flex flex-1 items-center gap-2">
+        <div className="p-1 -ml-1">
+          <GripVertical className="h-4 w-4 text-whatsapp-ink-subtle" />
+        </div>
+        {renderModelBadge(modelId)}
+        <span className="text-sm font-medium text-whatsapp-ink">
+          {getModelConfig(modelId).name}
+        </span>
+      </div>
+    </div>
+  );
+};
+
 const ModelManager = ({ selectedModels, setSelectedModels, disabled }) => {
-  const [draggedIndex, setDraggedIndex] = useState(null);
+  const [activeId, setActiveId] = useState(null);
 
-  const moveModel = (fromIndex, toIndex) => {
-    const newOrder = [...selectedModels];
-    const [movedModel] = newOrder.splice(fromIndex, 1);
-    newOrder.splice(toIndex, 0, movedModel);
-    setSelectedModels(newOrder);
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 5, // 5px movement required to start drag (prevents accidental clicks)
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  const handleDragStart = (event) => {
+    setActiveId(event.active.id);
   };
 
-  const handleDragStart = (e, index) => {
-    setDraggedIndex(index);
-    e.dataTransfer.effectAllowed = 'move';
-  };
+  const handleDragEnd = (event) => {
+    const { active, over } = event;
 
-  const handleDragOver = (e) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-  };
-
-  const handleDrop = (e, dropIndex) => {
-    e.preventDefault();
-    if (draggedIndex !== null && draggedIndex !== dropIndex) {
-      moveModel(draggedIndex, dropIndex);
+    if (active.id !== over?.id) {
+      const oldIndex = selectedModels.indexOf(active.id);
+      const newIndex = selectedModels.indexOf(over.id);
+      setSelectedModels(arrayMove(selectedModels, oldIndex, newIndex));
     }
-    setDraggedIndex(null);
+    setActiveId(null);
+  };
+
+  const handleDragCancel = () => {
+    setActiveId(null);
   };
 
   const toggleModel = (modelId) => {
@@ -161,35 +252,39 @@ const ModelManager = ({ selectedModels, setSelectedModels, disabled }) => {
             </p>
           </div>
 
-          {selectedModels.map((modelId, index) => (
-            <div
-              key={modelId}
-              draggable
-              onDragStart={(e) => handleDragStart(e, index)}
-              onDragOver={handleDragOver}
-              onDrop={(e) => handleDrop(e, index)}
-              className="flex items-center justify-between rounded-xl border border-transparent bg-whatsapp-accent-soft/70 px-3 py-2 transition-all hover:border-whatsapp-accent cursor-grab"
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragStart={handleDragStart}
+            onDragEnd={handleDragEnd}
+            onDragCancel={handleDragCancel}
+          >
+            <SortableContext
+              items={selectedModels}
+              strategy={verticalListSortingStrategy}
             >
-              <div className="flex flex-1 items-center gap-2">
-                <GripVertical className="h-4 w-4 text-whatsapp-ink-subtle" />
-                {renderModelBadge(modelId)}
-                <span className="text-sm font-medium text-whatsapp-ink">
-                  {getModelConfig(modelId).name}
-                </span>
-              </div>
-              <div className="flex items-center gap-3 text-xs text-whatsapp-ink-subtle">
-                <span className="font-medium">#{index + 1}</span>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => toggleModel(modelId)}
-                  className="h-7 w-7 rounded-full text-red-500 hover:bg-red-100"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </Button>
-              </div>
-            </div>
-          ))}
+              {selectedModels.map((modelId, index) => (
+                <SortableModelItem
+                  key={modelId}
+                  modelId={modelId}
+                  index={index}
+                  renderModelBadge={renderModelBadge}
+                  getModelConfig={getModelConfig}
+                  toggleModel={toggleModel}
+                />
+              ))}
+            </SortableContext>
+
+            <DragOverlay>
+              {activeId ? (
+                <DragOverlayItem
+                  modelId={activeId}
+                  renderModelBadge={renderModelBadge}
+                  getModelConfig={getModelConfig}
+                />
+              ) : null}
+            </DragOverlay>
+          </DndContext>
         </div>
 
         {MODELS.filter((m) => !selectedModels.includes(m.id)).length > 0 && (
