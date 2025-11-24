@@ -1264,7 +1264,7 @@ function App() {
                                             onClear={clearReply}
                                         />
                                     )}
-                                    <div className="chat-composer__context">
+                                    <div className="flex items-center gap-2 px-1">
                                         {conversationMode === 'direct' && (
                                             <span className="rounded-full bg-whatsapp-accent-soft px-3 py-1 text-xs font-semibold text-whatsapp-ink-soft">
                                                 Direct with {replyToMessage?.model || 'model'}
@@ -1275,6 +1275,8 @@ function App() {
                                                 Direct call: {mentionTarget.name}
                                             </span>
                                         )}
+                                    </div>
+                                    <div className="chat-composer__context">
                                         <div className="chat-composer__field">
                                             <textarea
                                                 rows={1}
