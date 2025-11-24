@@ -3,6 +3,8 @@ import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useAuth } from '../AuthContext';
 
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:7001';
+
 const ProfilePictureUpload = ({ user, onAvatarUpdate, className = '' }) => {
     const [uploading, setUploading] = useState(false);
     const [avatarUrl, setAvatarUrl] = useState(user?.avatar_url);
@@ -29,7 +31,7 @@ const ProfilePictureUpload = ({ user, onAvatarUpdate, className = '' }) => {
             const formData = new FormData();
             formData.append('avatar', file);
 
-            const response = await fetch('http://localhost:7001/api/profile/avatar', {
+            const response = await fetch(`${BACKEND_URL}/api/profile/avatar`, {
                 method: 'POST',
                 body: formData,
                 headers: {
@@ -42,7 +44,9 @@ const ProfilePictureUpload = ({ user, onAvatarUpdate, className = '' }) => {
             }
 
             const result = await response.json();
-            const fullUrl = `http://localhost:7001${result.avatarUrl}`;
+            const fullUrl = result.avatarUrl.startsWith('http')
+                ? result.avatarUrl
+                : `${BACKEND_URL}${result.avatarUrl}`;
             setAvatarUrl(fullUrl);
 
             if (onAvatarUpdate) {

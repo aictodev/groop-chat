@@ -3,6 +3,8 @@ import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useAuth } from '../AuthContext';
 
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:7001';
+
 const ConversationImageManager = ({ conversationId, currentImageUrl, onImageUpdate, className = '' }) => {
     const [uploading, setUploading] = useState(false);
     const [generating, setGenerating] = useState(false);
@@ -31,7 +33,7 @@ const ConversationImageManager = ({ conversationId, currentImageUrl, onImageUpda
             const formData = new FormData();
             formData.append('avatar', file);
 
-            const response = await fetch(`http://localhost:7001/api/conversations/${conversationId}/avatar`, {
+            const response = await fetch(`${BACKEND_URL}/api/conversations/${conversationId}/avatar`, {
                 method: 'POST',
                 body: formData,
                 headers: {
@@ -44,7 +46,9 @@ const ConversationImageManager = ({ conversationId, currentImageUrl, onImageUpda
             }
 
             const result = await response.json();
-            const fullUrl = `http://localhost:7001${result.avatarUrl}`;
+            const fullUrl = result.avatarUrl.startsWith('http')
+                ? result.avatarUrl
+                : `${BACKEND_URL}${result.avatarUrl}`;
 
             if (onImageUpdate) {
                 onImageUpdate(fullUrl);
@@ -67,7 +71,7 @@ const ConversationImageManager = ({ conversationId, currentImageUrl, onImageUpda
         setGenerating(true);
 
         try {
-            const response = await fetch(`http://localhost:7001/api/conversations/${conversationId}/generate-avatar`, {
+            const response = await fetch(`${BACKEND_URL}/api/conversations/${conversationId}/generate-avatar`, {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${session?.access_token}`,
@@ -80,7 +84,9 @@ const ConversationImageManager = ({ conversationId, currentImageUrl, onImageUpda
             }
 
             const result = await response.json();
-            const fullUrl = `http://localhost:7001${result.avatarUrl}`;
+            const fullUrl = result.avatarUrl.startsWith('http')
+                ? result.avatarUrl
+                : `${BACKEND_URL}${result.avatarUrl}`;
 
             if (onImageUpdate) {
                 onImageUpdate(fullUrl);
@@ -104,7 +110,7 @@ const ConversationImageManager = ({ conversationId, currentImageUrl, onImageUpda
 
         try {
             // Update conversation to remove avatar
-            await fetch(`http://localhost:7001/api/conversations/${conversationId}/avatar`, {
+            await fetch(`${BACKEND_URL}/api/conversations/${conversationId}/avatar`, {
                 method: 'POST',
                 body: JSON.stringify({ remove: true }),
                 headers: {

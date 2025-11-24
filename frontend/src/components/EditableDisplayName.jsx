@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '../AuthContext';
 
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:7001';
+
 const EditableDisplayName = ({ displayName, onDisplayNameUpdate, className = '' }) => {
     const [isEditing, setIsEditing] = useState(false);
     const [tempDisplayName, setTempDisplayName] = useState(displayName || '');
@@ -22,7 +24,7 @@ const EditableDisplayName = ({ displayName, onDisplayNameUpdate, className = '' 
         setSaving(true);
 
         try {
-            const response = await fetch('http://localhost:7001/api/profile/display-name', {
+            const response = await fetch(`${BACKEND_URL}/api/profile/display-name`, {
                 method: 'PUT',
                 headers: {
                     'Authorization': `Bearer ${session?.access_token}`,
