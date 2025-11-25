@@ -827,7 +827,7 @@ app.post('/api/profile/avatar', optionalAuth, upload.single('avatar'), async (re
             return res.status(500).json({ error: 'Supabase storage is not configured on the server' });
         }
 
-        const bucket = process.env.SUPABASE_AVATAR_BUCKET || 'avatars';
+        const bucket = process.env.SUPABASE_AVATAR_BUCKET || 'profile_pic';
 
         const fileName = `${userId}_${uuidv4()}.jpg`;
 
