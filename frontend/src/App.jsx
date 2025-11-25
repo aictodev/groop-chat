@@ -143,6 +143,28 @@ function App() {
     const cacheHydratedRef = useRef(false);
     const activeConversationIdRef = useRef(null);
 
+    // Handle Visual Viewport for mobile layout
+    useEffect(() => {
+        const handleVisualViewportResize = () => {
+            if (window.visualViewport) {
+                document.documentElement.style.setProperty('--app-height', `${window.visualViewport.height}px`);
+            }
+        };
+
+        if (window.visualViewport) {
+            window.visualViewport.addEventListener('resize', handleVisualViewportResize);
+            window.visualViewport.addEventListener('scroll', handleVisualViewportResize);
+            handleVisualViewportResize(); // Initial set
+        }
+
+        return () => {
+            if (window.visualViewport) {
+                window.visualViewport.removeEventListener('resize', handleVisualViewportResize);
+                window.visualViewport.removeEventListener('scroll', handleVisualViewportResize);
+            }
+        };
+    }, []);
+
     const adjustComposerHeight = useCallback(() => {
         const inputEl = composerInputRef.current;
         if (!inputEl) {
