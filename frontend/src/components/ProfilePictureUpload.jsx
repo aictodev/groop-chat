@@ -40,7 +40,8 @@ const ProfilePictureUpload = ({ user, onAvatarUpdate, className = '' }) => {
             });
 
             if (!response.ok) {
-                throw new Error('Failed to upload image');
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.error || `Server error: ${response.status} ${response.statusText}`);
             }
 
             const result = await response.json();
@@ -55,7 +56,7 @@ const ProfilePictureUpload = ({ user, onAvatarUpdate, className = '' }) => {
 
         } catch (error) {
             console.error('Error uploading profile picture:', error);
-            alert('Failed to upload profile picture. Please try again.');
+            alert(`Upload failed: ${error.message}`);
         } finally {
             setUploading(false);
         }
