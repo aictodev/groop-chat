@@ -386,7 +386,7 @@
   }
 
   .chat-header {
-    @apply flex items-center justify-between border-b border-whatsapp-divider bg-whatsapp-panel px-6 py-4 shadow-sm backdrop-blur;
+    @apply flex items-center justify-between gap-4 border-b border-whatsapp-divider bg-whatsapp-panel px-6 py-4 shadow-sm backdrop-blur;
     background-color: rgba(255, 255, 255, 0.95);
   }
 
@@ -420,7 +420,7 @@
   }
 
   .chat-header__title-block {
-    @apply flex flex-col gap-1;
+    @apply flex flex-col gap-1 min-w-0 overflow-hidden w-full;
   }
 
   .chat-header__title-row {
@@ -428,7 +428,7 @@
   }
 
   .chat-header__rename-input {
-    @apply rounded-xl border border-whatsapp-divider bg-white px-3 py-1 text-base font-semibold text-whatsapp-ink focus:border-whatsapp-accent focus:outline-none;
+    @apply w-full min-w-0 rounded-xl border border-whatsapp-divider bg-white px-3 py-1 text-base font-semibold text-whatsapp-ink focus:border-whatsapp-accent focus:outline-none;
   }
 
   .chat-header__rename-button {
