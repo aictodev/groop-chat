@@ -1222,11 +1222,11 @@ function App() {
                                                 {activeConversationId && (
                                                     <button
                                                         type="button"
-                                                        className="chat-header__rename-button"
+                                                        className="chat-header__rename-button p-1.5 rounded-full hover:bg-black/5"
                                                         onClick={() => handleRenameConversation(activeConversationId, 'header')}
+                                                        aria-label="Edit title"
                                                     >
-                                                        <Pencil className="h-3.5 w-3.5" />
-                                                        <span>Edit</span>
+                                                        <Pencil className="h-4 w-4 text-whatsapp-ink-soft" />
                                                     </button>
                                                 )}
                                             </div>

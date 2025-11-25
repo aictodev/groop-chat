@@ -75,6 +75,7 @@
     @apply font-body antialiased;
     background-color: var(--whatsapp-surface);
     color: var(--whatsapp-ink);
+    touch-action: manipulation;
   }
 }
 
