@@ -213,7 +213,7 @@
   }
 
   .chat-shell {
-    @apply flex h-screen w-full bg-whatsapp-surface text-whatsapp-ink;
+    @apply flex h-[100dvh] w-full bg-whatsapp-surface text-whatsapp-ink overflow-hidden fixed inset-0;
   }
 
   .chat-sidebar {
