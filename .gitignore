@@ -77,3 +77,4 @@ backend/uploads/
 frontend/public/robot.jpg
 frontend/public/robot.jpg.backup
 .vercel
+AGENTS.md
