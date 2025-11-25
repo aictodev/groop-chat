@@ -1539,7 +1539,15 @@ const Sidebar = ({
                                 </div>
                             </DropdownMenuLabel>
                             <DropdownMenuSeparator className="bg-whatsapp-divider" />
-                            <DropdownMenuItem onClick={onProfileClick} className="cursor-pointer text-sm text-whatsapp-ink">
+                            <DropdownMenuItem
+                                onClick={() => {
+                                    onProfileClick();
+                                    if (isMobileOpen) {
+                                        onMobileClose?.();
+                                    }
+                                }}
+                                className="cursor-pointer text-sm text-whatsapp-ink"
+                            >
                                 Profile &amp; Settings
                             </DropdownMenuItem>
                             <DropdownMenuSeparator className="bg-whatsapp-divider" />
