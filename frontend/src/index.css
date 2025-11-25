@@ -511,6 +511,7 @@
 
   .chat-composer {
     @apply flex items-end gap-3 border-t border-whatsapp-divider bg-whatsapp-panel px-6 py-4;
+    padding-bottom: calc(1rem + env(safe-area-inset-bottom));
   }
 
   .chat-composer__context {
