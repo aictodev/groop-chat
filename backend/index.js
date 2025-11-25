@@ -846,7 +846,7 @@ app.post('/api/profile/avatar', optionalAuth, upload.single('avatar'), async (re
 
         if (storageError) {
             console.error('Error uploading avatar to Supabase storage:', storageError);
-            return res.status(500).json({ error: 'Failed to upload profile picture' });
+            return res.status(500).json({ error: `Storage error: ${storageError.message}` });
         }
 
         let publicUrl = null;
@@ -869,7 +869,7 @@ app.post('/api/profile/avatar', optionalAuth, upload.single('avatar'), async (re
         });
     } catch (error) {
         console.error('Error uploading profile picture:', error);
-        res.status(500).json({ error: 'Failed to upload profile picture' });
+        res.status(500).json({ error: `Upload failed: ${error.message}` });
     }
 });
 
