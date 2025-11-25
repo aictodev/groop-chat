@@ -71,11 +71,24 @@
     border-color: hsl(var(--border));
   }
 
+  html,
+  body,
+  #root {
+    height: 100%;
+    width: 100%;
+    overflow: hidden;
+    margin: 0;
+    padding: 0;
+  }
+
   body {
     @apply font-body antialiased;
     background-color: var(--whatsapp-surface);
     color: var(--whatsapp-ink);
     touch-action: manipulation;
+    position: fixed;
+    /* Prevent elastic scrolling on iOS */
+    inset: 0;
   }
 }
 
