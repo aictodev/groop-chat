@@ -15,7 +15,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { MoreVertical, Menu, X, Pencil, Gauge } from 'lucide-react';
+import { MoreVertical, Menu, X, Pencil, Gauge, Copy, Check } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { ConversationAvatar } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import {
@@ -1768,6 +1770,53 @@ const HeaderIcon = ({ children, title }) => (
     </button>
 );
 
+const MarkdownRenderer = ({ content }) => {
+    return (
+        <ReactMarkdown
+            remarkPlugins={[remarkGfm]}
+            className="markdown-body"
+            components={{
+                h1: ({ node, ...props }) => <h1 className="text-lg font-bold mb-2 mt-4 first:mt-0" {...props} />,
+                h2: ({ node, ...props }) => <h2 className="text-base font-bold mb-2 mt-3" {...props} />,
+                h3: ({ node, ...props }) => <h3 className="text-sm font-bold mb-1 mt-2" {...props} />,
+                p: ({ node, ...props }) => <p className="mb-2 last:mb-0 leading-relaxed" {...props} />,
+                ul: ({ node, ...props }) => <ul className="list-disc pl-4 mb-2 space-y-1" {...props} />,
+                ol: ({ node, ...props }) => <ol className="list-decimal pl-4 mb-2 space-y-1" {...props} />,
+                li: ({ node, ...props }) => <li className="pl-1" {...props} />,
+                blockquote: ({ node, ...props }) => <blockquote className="border-l-4 border-whatsapp-divider pl-3 italic my-2 text-whatsapp-ink-soft" {...props} />,
+                code: ({ node, inline, className, children, ...props }) => {
+                    const match = /language-(\w+)/.exec(className || '');
+                    return !inline ? (
+                        <div className="relative group my-3 rounded-lg overflow-hidden bg-whatsapp-panel-muted border border-whatsapp-divider">
+                            <div className="flex items-center justify-between px-3 py-1.5 bg-whatsapp-divider/30 text-xs text-whatsapp-ink-soft font-mono border-b border-whatsapp-divider">
+                                <span>{match?.[1] || 'code'}</span>
+                            </div>
+                            <pre className="p-3 overflow-x-auto text-sm font-mono text-whatsapp-ink bg-transparent m-0">
+                                <code className={className} {...props}>
+                                    {children}
+                                </code>
+                            </pre>
+                        </div>
+                    ) : (
+                        <code className="px-1.5 py-0.5 rounded bg-whatsapp-panel-muted text-whatsapp-ink font-mono text-[0.9em]" {...props}>
+                            {children}
+                        </code>
+                    );
+                },
+                a: ({ node, ...props }) => <a className="text-whatsapp-accent hover:underline font-medium" target="_blank" rel="noopener noreferrer" {...props} />,
+                table: ({ node, ...props }) => <div className="overflow-x-auto my-3 rounded-lg border border-whatsapp-divider"><table className="w-full text-sm text-left" {...props} /></div>,
+                thead: ({ node, ...props }) => <thead className="bg-whatsapp-panel-muted text-whatsapp-ink font-semibold" {...props} />,
+                tbody: ({ node, ...props }) => <tbody className="divide-y divide-whatsapp-divider" {...props} />,
+                tr: ({ node, ...props }) => <tr className="hover:bg-whatsapp-surface/50 transition-colors" {...props} />,
+                th: ({ node, ...props }) => <th className="px-3 py-2" {...props} />,
+                td: ({ node, ...props }) => <td className="px-3 py-2" {...props} />,
+            }}
+        >
+            {content}
+        </ReactMarkdown>
+    );
+};
+
 const ChatWindow = ({ messages, isLoading, chatEndRef }) => (
     <main
         className="flex-1 overflow-y-auto px-2 sm:px-4 py-3 bg-[length:400px_400px]"
@@ -1786,6 +1835,24 @@ const ChatWindow = ({ messages, isLoading, chatEndRef }) => (
 );
 
 const MessageBubble = ({ msg, onReply }) => {
+    const [isCopied, setIsCopied] = useState(false);
+
+    const handleCopy = async () => {
+        try {
+            await navigator.clipboard.writeText(msg.text || '');
+            setIsCopied(true);
+            setTimeout(() => setIsCopied(false), 2000);
+        } catch (err) {
+            console.error('Failed to copy text:', err);
+        }
+    };
+
+    const handleContextMenu = (e) => {
+        // Mobile long-press detection
+        e.preventDefault();
+        handleCopy();
+    };
+
     if (msg.sender === 'system') {
         return (
             <div className="chat-message chat-message--system">
@@ -1797,7 +1864,7 @@ const MessageBubble = ({ msg, onReply }) => {
 
     const isUser = msg.sender === 'user';
     const bubbleClasses = cn(
-        'chat-message',
+        'chat-message group relative',
         isUser ? 'chat-message--outgoing' : 'chat-message--incoming',
         msg.isDirectReply && !isUser && 'ring-1 ring-whatsapp-accent/40'
     );
@@ -1812,10 +1879,13 @@ const MessageBubble = ({ msg, onReply }) => {
 
     const renderedContent = isUser
         ? renderTextWithModelMentions(msg.text || '')
-        : msg.text;
+        : <MarkdownRenderer content={msg.text || ''} />;
 
     return (
-        <div className={bubbleClasses}>
+        <div
+            className={bubbleClasses}
+            onContextMenu={!isUser ? handleContextMenu : undefined}
+        >
             {!isUser && (
                 <div className="chat-message__header">
                     <ProviderIcon modelId={providerId} size={20} />
@@ -1847,19 +1917,21 @@ const MessageBubble = ({ msg, onReply }) => {
             <div className="chat-message__meta">
                 <span>{formatTime(msg.time)}</span>
                 {!isUser && (
-                    <button
-                        type="button"
-                        className="text-xs font-medium text-whatsapp-ink-soft transition hover:text-whatsapp-ink"
-                        onClick={(event) => {
-                            event.preventDefault();
-                            event.stopPropagation();
-                            if (onReply) {
-                                onReply(msg);
-                            }
-                        }}
-                    >
-                        Reply
-                    </button>
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={handleCopy}
+                            className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-black/5 rounded"
+                            title="Copy to clipboard"
+                        >
+                            {isCopied ? <Check className="w-3 h-3 text-green-600" /> : <Copy className="w-3 h-3 text-whatsapp-ink-subtle" />}
+                        </button>
+                        <button
+                            onClick={() => onReply(msg)}
+                            className="text-whatsapp-ink-subtle hover:text-whatsapp-ink transition-colors"
+                        >
+                            Reply
+                        </button>
+                    </div>
                 )}
             </div>
         </div>
