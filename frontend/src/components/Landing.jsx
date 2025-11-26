@@ -39,6 +39,23 @@ const Landing = ({ onGoogleSignIn, onEmailSignIn, onEmailSignUp }) => {
   return (
     <div className="landing-shell">
       <section className="landing-hero">
+        <div className="landing-background">
+          <div className="floating-logo logo-openai" style={{ '--delay': '0s', '--duration': '15s', '--top': '15%', '--left': '10%' }}>
+            <img src="/icons/openai.svg" alt="OpenAI" />
+          </div>
+          <div className="floating-logo logo-anthropic" style={{ '--delay': '-5s', '--duration': '18s', '--top': '60%', '--left': '15%' }}>
+            <img src="/icons/anthropic.svg" alt="Anthropic" />
+          </div>
+          <div className="floating-logo logo-google" style={{ '--delay': '-2s', '--duration': '20s', '--top': '25%', '--left': '80%' }}>
+            <img src="/icons/google.svg" alt="Google" />
+          </div>
+          <div className="floating-logo logo-meta" style={{ '--delay': '-8s', '--duration': '22s', '--top': '70%', '--left': '75%' }}>
+            <img src="/icons/meta.svg" alt="Meta" />
+          </div>
+          <div className="floating-logo logo-xai" style={{ '--delay': '-12s', '--duration': '25s', '--top': '40%', '--left': '50%' }}>
+            <img src="/icons/xai.svg" alt="xAI" />
+          </div>
+        </div>
         <div className="landing-hero__inner">
           <span className="landing-brand">GroopChat</span>
           <h1 className="landing-headline">

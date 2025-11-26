@@ -101,6 +101,49 @@
     background: linear-gradient(145deg, #090221 0%, #030014 60%, #02000d 100%);
   }
 
+  .landing-background {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+  }
+
+  .floating-logo {
+    position: absolute;
+    width: 64px;
+    height: 64px;
+    opacity: 0.15;
+    filter: grayscale(100%);
+    animation: float var(--duration) ease-in-out infinite;
+    animation-delay: var(--delay);
+    top: var(--top);
+    left: var(--left);
+    transition: opacity 0.3s ease;
+  }
+
+  .floating-logo img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+
+  .floating-logo:hover {
+    opacity: 0.4;
+    filter: grayscale(0%);
+  }
+
+  @keyframes float {
+
+    0%,
+    100% {
+      transform: translateY(0) rotate(0deg);
+    }
+
+    50% {
+      transform: translateY(-20px) rotate(5deg);
+    }
+  }
+
   .landing-hero__inner {
     @apply mx-auto flex max-w-xl flex-col gap-8 px-12 text-left;
   }

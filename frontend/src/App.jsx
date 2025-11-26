@@ -1158,6 +1158,7 @@ function App() {
             setMessages([]);
             setActiveConversationId(conversationId);
         }
+        setCurrentView('chat');
         setIsSidebarOpen(false);
     };
 
