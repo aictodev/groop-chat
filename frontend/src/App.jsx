@@ -2174,7 +2174,25 @@ Constraints:
                                     </div>
                                 ) : (
                                     <div className="mt-4 space-y-3 rounded-xl border border-dashed border-whatsapp-divider bg-white/40 p-4 text-sm text-whatsapp-ink-soft">
-                                        <p className="font-medium">Using workspace default prompt:</p>
+                                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                            <p className="font-medium">Using workspace default prompt:</p>
+                                            <Button
+                                                size="sm"
+                                                variant="whatsapp-secondary"
+                                                onClick={() => {
+                                                    // Forking a system prompt
+                                                    setEditingPrompt({
+                                                        prompt_type: type.key,
+                                                        title: `My ${type.label}`,
+                                                        content: getDefaultPromptForType(type.key),
+                                                        is_default: true,
+                                                        id: null
+                                                    });
+                                                }}
+                                            >
+                                                Edit
+                                            </Button>
+                                        </div>
                                         <pre className="max-h-64 overflow-auto rounded-lg bg-whatsapp-surface px-4 py-3 text-sm leading-relaxed text-whatsapp-ink whitespace-pre-wrap">
                                             {getDefaultPromptForType(type.key)}
                                         </pre>
