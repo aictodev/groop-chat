@@ -598,7 +598,8 @@
 
     .chat-history {
       @apply px-3 py-4;
-      padding-bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px));
+      /* Increase padding to account for fixed composer (approx 160px + safe area) */
+      padding-bottom: calc(160px + env(safe-area-inset-bottom, 20px));
     }
 
     .chat-history__stack {
@@ -615,10 +616,11 @@
     }
 
     .chat-composer {
-      @apply sticky bottom-0 flex-col gap-3 border-t px-4 py-3;
-      background-color: rgba(255, 255, 255, 0.92);
+      @apply fixed bottom-0 left-0 right-0 z-50 flex-col gap-3 border-t px-4 py-3;
+      background-color: rgba(255, 255, 255, 0.95);
       backdrop-filter: blur(10px);
-      padding-bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));
+      padding-bottom: calc(1.5rem + env(safe-area-inset-bottom, 20px));
+      box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.05);
     }
 
     .chat-composer {

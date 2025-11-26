@@ -476,7 +476,12 @@ function App() {
 
         const url = targetConversationId
             ? `${BACKEND_URL}/api/conversations/${targetConversationId}/messages`
-            : `${BACKEND_URL}/api/messages`;
+            : null;
+
+        if (!url) {
+            setMessages([]);
+            return;
+        }
 
         console.log('Loading messages from:', url);
 
@@ -602,9 +607,8 @@ function App() {
                 console.error('Failed to load fallback messages:', fallbackError);
             }
 
-            setMessages([
-                { id: 'welcome', sender: 'system', text: 'Welcome to the AI Group Chat! Select a First Responder and ask a question to begin.', time: new Date() }
-            ]);
+            // Don't set welcome message in state to avoid duplication/persistence
+            setMessages([]);
         }
     };
 
@@ -1267,13 +1271,19 @@ function App() {
 
                             <div className="chat-history" ref={chatContainerRef}>
                                 <div className="chat-history__stack">
-                                    {messages.map((msg) => (
-                                        <MessageBubble
-                                            key={msg.id || `${msg.sender}-${msg.time}-${msg.model}`}
-                                            msg={msg}
-                                            onReply={handleReplyToMessage}
-                                        />
-                                    ))}
+                                    {messages.length === 0 && !isLoading ? (
+                                        <div className="chat-message chat-message--system mt-8">
+                                            Welcome to the AI Group Chat! Select a First Responder and ask a question to begin.
+                                        </div>
+                                    ) : (
+                                        messages.map((msg) => (
+                                            <MessageBubble
+                                                key={msg.id || `${msg.sender}-${msg.time}-${msg.model}`}
+                                                msg={msg}
+                                                onReply={handleReplyToMessage}
+                                            />
+                                        ))
+                                    )}
                                     {isLoading && typingModel && (
                                         <TypingIndicator model={typingModel} />
                                     )}
