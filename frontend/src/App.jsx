@@ -2128,10 +2128,32 @@ Constraints:
                                         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                                             <p className="text-sm font-semibold text-whatsapp-accent-dark">{activePrompt.title}</p>
                                             <div className="flex items-center gap-2">
+                                                {activePrompt.user_id === user.id ? (
+                                                    <span className="rounded-full bg-whatsapp-accent/10 px-2 py-0.5 text-[10px] font-medium text-whatsapp-accent-dark">
+                                                        My Custom
+                                                    </span>
+                                                ) : (
+                                                    <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-[10px] font-medium text-neutral-500">
+                                                        Workspace Default
+                                                    </span>
+                                                )}
                                                 <Button
                                                     size="sm"
                                                     variant="whatsapp-secondary"
-                                                    onClick={() => setEditingPrompt(activePrompt)}
+                                                    onClick={() => {
+                                                        const isOwner = activePrompt.user_id === user.id;
+                                                        if (isOwner) {
+                                                            setEditingPrompt(activePrompt);
+                                                        } else {
+                                                            // Forking a system prompt
+                                                            setEditingPrompt({
+                                                                ...activePrompt,
+                                                                id: null, // Clear ID to force creation (POST)
+                                                                title: `My ${activePrompt.title}`,
+                                                                is_default: true
+                                                            });
+                                                        }
+                                                    }}
                                                 >
                                                     Edit
                                                 </Button>
