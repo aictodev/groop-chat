@@ -86,9 +86,7 @@
     background-color: var(--whatsapp-surface);
     color: var(--whatsapp-ink);
     touch-action: manipulation;
-    position: fixed;
-    /* Prevent elastic scrolling on iOS */
-    inset: 0;
+    /* Removed fixed position to allow natural viewport behavior */
   }
 }
 
