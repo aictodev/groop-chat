@@ -1053,7 +1053,49 @@ class Database {
         }
     }
 
-    // Create or update user prompt
+    // Create a new user prompt
+    async createUserPrompt(userId, promptType, title, content, isDefault = false) {
+        try {
+            // If setting as default, unset other defaults for this user/type
+            if (isDefault) {
+                await supabase
+                    .from('user_prompts')
+                    .update({ is_default: false })
+                    .eq('user_id', userId)
+                    .eq('prompt_type', promptType)
+                    .eq('is_default', true);
+            }
+
+            const promptData = {
+                user_id: userId,
+                prompt_type: promptType,
+                title,
+                content,
+                is_default: isDefault,
+                is_active: true,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+            };
+
+            const { data, error } = await supabase
+                .from('user_prompts')
+                .insert(promptData)
+                .select()
+                .single();
+
+            if (error) {
+                console.error('Error creating user prompt:', error);
+                throw new Error('Failed to create user prompt');
+            }
+
+            return data;
+        } catch (err) {
+            console.error('Exception in createUserPrompt:', err);
+            throw err;
+        }
+    }
+
+    // Create or update user prompt (Legacy - keeping for reference if needed)
     async saveUserPrompt(userId, promptType, title, content, isDefault = false) {
         try {
             // If setting as default, unset other defaults for this user/type
