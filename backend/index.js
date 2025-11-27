@@ -1,4 +1,4 @@
-require('dotenv').config({ path: '../.env' });
+require('dotenv').config();
 const express = require('express');
 const axios = require('axios');
 const cors = require('cors');
@@ -17,6 +17,11 @@ const requireAuth = authenticateUser;
 const app = express();
 app.use(express.json());
 app.use(cors()); // Enable CORS for frontend communication
+
+// Root route for health check/verification
+app.get('/', (req, res) => {
+    res.send('Backend is running!');
+});
 
 // Serve static files from uploads directory
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
@@ -71,7 +76,7 @@ const MODEL_DETAILS = {
 };
 
 // --- Load prompt templates ---
-const PROMPTS_DIR = path.resolve(__dirname, '..', 'prompts');
+const PROMPTS_DIR = path.join(__dirname, 'prompts');
 function loadTemplate(filename) {
     try {
         return fs.readFileSync(path.join(PROMPTS_DIR, filename), 'utf8');
