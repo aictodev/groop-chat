@@ -113,7 +113,7 @@
     width: 64px;
     height: 64px;
     opacity: 0.15;
-    filter: grayscale(100%);
+    filter: invert(1);
     animation: float var(--duration) ease-in-out infinite;
     animation-delay: var(--delay);
     top: var(--top);
@@ -129,7 +129,6 @@
 
   .floating-logo:hover {
     opacity: 0.4;
-    filter: grayscale(0%);
   }
 
   @keyframes float {
