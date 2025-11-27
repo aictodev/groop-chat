@@ -11,6 +11,16 @@ const { v4: uuidv4 } = require('uuid');
 const database = require('./database');
 const { authenticateUser, optionalAuth } = require('./auth');
 
+// Global error handler for uncaught exceptions
+process.on('uncaughtException', (err) => {
+    console.error('UNCAUGHT EXCEPTION:', err);
+    // Keep running if possible
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('UNHANDLED REJECTION:', reason);
+});
+
 // Alias for consistency
 const requireAuth = authenticateUser;
 

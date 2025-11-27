@@ -13,8 +13,18 @@ if (!supabaseUrl || !supabaseAnonKey) {
 }
 
 // Use service role key for backend operations to bypass RLS
-const supabase = createClient(supabaseUrl, supabaseServiceKey || supabaseAnonKey);
-console.log('Database initialized with', supabaseServiceKey ? 'service role key' : 'anon key');
+// Use service role key for backend operations to bypass RLS
+let supabase = null;
+try {
+    if (supabaseUrl) {
+        supabase = createClient(supabaseUrl, supabaseServiceKey || supabaseAnonKey);
+        console.log('Database initialized with', supabaseServiceKey ? 'service role key' : 'anon key');
+    } else {
+        console.warn('Supabase URL missing, database operations will fail or fallback to sample data');
+    }
+} catch (e) {
+    console.error('Failed to initialize Supabase client:', e);
+}
 
 // Fallback sample data used when Supabase is unreachable
 const SAMPLE_USER_ID = '00000000-0000-0000-0000-000000000001';
