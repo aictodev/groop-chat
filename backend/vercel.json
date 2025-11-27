@@ -5,18 +5,18 @@
             "includeFiles": "prompts/**",
             "maxDuration": 60
         },
-        "debug.js": {
+        "api/debug.js": {
             "maxDuration": 10
         }
     },
-    "routes": [
+    "rewrites": [
         {
-            "src": "/debug",
-            "dest": "/debug.js"
+            "source": "/debug",
+            "destination": "/api/debug"
         },
         {
-            "src": "/(.*)",
-            "dest": "/index.js"
+            "source": "/(.*)",
+            "destination": "/index.js"
         }
     ]
 }
