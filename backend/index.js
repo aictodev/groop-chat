@@ -6,7 +6,12 @@ const { createClient } = require('@supabase/supabase-js');
 const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
-const sharp = require('sharp');
+let sharp;
+try {
+    sharp = require('sharp');
+} catch (e) {
+    console.error('Failed to load sharp:', e);
+}
 const { v4: uuidv4 } = require('uuid');
 const database = require('./database');
 const { authenticateUser, optionalAuth } = require('./auth');
