@@ -8,7 +8,8 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!supabaseUrl || !supabaseAnonKey) {
     console.error('Missing Supabase credentials. Please set SUPABASE_URL and SUPABASE_ANON_KEY in your .env file');
-    process.exit(1);
+    // Do not exit, just log error. This allows the server to start and fail gracefully later.
+    // process.exit(1); 
 }
 
 // Use service role key for backend operations to bypass RLS
