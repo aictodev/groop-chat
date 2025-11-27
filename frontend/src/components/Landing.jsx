@@ -40,20 +40,38 @@ const Landing = ({ onGoogleSignIn, onEmailSignIn, onEmailSignUp }) => {
     <div className="landing-shell">
       <section className="landing-hero">
         <div className="landing-background">
-          <div className="floating-logo logo-openai" style={{ '--delay': '0s', '--duration': '15s', '--top': '15%', '--left': '10%' }}>
+          <div className="floating-logo logo-openai" style={{ '--delay': '0s', '--duration': '25s', '--top': '15%', '--left': '10%' }}>
             <img src="/icons/openai.svg" alt="OpenAI" />
           </div>
-          <div className="floating-logo logo-anthropic" style={{ '--delay': '-5s', '--duration': '18s', '--top': '60%', '--left': '15%' }}>
+          <div className="floating-logo logo-anthropic" style={{ '--delay': '-5s', '--duration': '28s', '--top': '60%', '--left': '15%' }}>
             <img src="/icons/anthropic.svg" alt="Anthropic" />
           </div>
-          <div className="floating-logo logo-google" style={{ '--delay': '-2s', '--duration': '20s', '--top': '25%', '--left': '80%' }}>
+          <div className="floating-logo logo-google" style={{ '--delay': '-2s', '--duration': '30s', '--top': '25%', '--left': '80%' }}>
             <img src="/icons/google.svg" alt="Google" />
           </div>
-          <div className="floating-logo logo-meta" style={{ '--delay': '-8s', '--duration': '22s', '--top': '70%', '--left': '75%' }}>
+          <div className="floating-logo logo-meta" style={{ '--delay': '-8s', '--duration': '32s', '--top': '70%', '--left': '75%' }}>
             <img src="/icons/meta.svg" alt="Meta" />
           </div>
-          <div className="floating-logo logo-xai" style={{ '--delay': '-12s', '--duration': '25s', '--top': '40%', '--left': '50%' }}>
+          <div className="floating-logo logo-xai" style={{ '--delay': '-12s', '--duration': '35s', '--top': '40%', '--left': '50%' }}>
             <img src="/icons/xai.svg" alt="xAI" />
+          </div>
+          <div className="floating-logo logo-mistral" style={{ '--delay': '-15s', '--duration': '27s', '--top': '80%', '--left': '30%' }}>
+            <img src="/icons/mistral.svg" alt="Mistral" />
+          </div>
+          <div className="floating-logo logo-cohere" style={{ '--delay': '-7s', '--duration': '29s', '--top': '10%', '--left': '60%' }}>
+            <img src="/icons/cohere.svg" alt="Cohere" />
+          </div>
+          <div className="floating-logo logo-perplexity" style={{ '--delay': '-20s', '--duration': '33s', '--top': '50%', '--left': '90%' }}>
+            <img src="/icons/perplexity.svg" alt="Perplexity" />
+          </div>
+          <div className="floating-logo logo-groq" style={{ '--delay': '-3s', '--duration': '31s', '--top': '85%', '--left': '55%' }}>
+            <img src="/icons/groq.svg" alt="Groq" />
+          </div>
+          <div className="floating-logo logo-deepseek" style={{ '--delay': '-10s', '--duration': '34s', '--top': '20%', '--left': '40%' }}>
+            <img src="/icons/deepseek.svg" alt="DeepSeek" />
+          </div>
+          <div className="floating-logo logo-moonshot" style={{ '--delay': '-18s', '--duration': '36s', '--top': '35%', '--left': '5%' }}>
+            <img src="/icons/moonshot.svg" alt="Moonshot" />
           </div>
         </div>
         <div className="landing-hero__inner">
