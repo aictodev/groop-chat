@@ -75,10 +75,10 @@ const Landing = ({ onGoogleSignIn, onEmailSignIn, onEmailSignUp }) => {
           </div>
         </div>
         <div className="landing-hero__inner">
-          <span className="landing-brand">GroopChat</span>
+          <span className="landing-brand">GroupChat</span>
           <h1 className="landing-headline">
-            <span className="landing-headline__accent">Coordinate</span>
-            <span className="landing-headline__text">multiple AI voices for richer answers.</span>
+            <span className="landing-headline__accent">Group Chat</span>
+            <span className="landing-headline__text">Coordinate multiple AI voices for richer answers.</span>
           </h1>
           <p className="landing-subcopy">
             Curate a lineup of frontier models, keep every conversation organized, and switch between group or direct replies with a single tap.

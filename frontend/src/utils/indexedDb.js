@@ -1,6 +1,6 @@
 const isBrowser = typeof window !== 'undefined' && typeof window.indexedDB !== 'undefined';
 
-const DB_NAME = 'groopchat-cache';
+const DB_NAME = 'groupchat-cache';
 const STORE_NAME = 'kv';
 const DB_VERSION = 1;
 

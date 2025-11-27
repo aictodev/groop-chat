@@ -1,6 +1,6 @@
 import { getItem, setItem, deleteItem } from './indexedDb';
 
-const KEY_PREFIX = 'groopchat';
+const KEY_PREFIX = 'groupchat';
 
 const conversationKey = (userId) => `${KEY_PREFIX}:conversations:${userId}`;
 const messagesKey = (userId, conversationId) => `${KEY_PREFIX}:messages:${userId}:${conversationId}`;
