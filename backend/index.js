@@ -26,7 +26,7 @@ const storage = multer.memoryStorage();
 const upload = multer({
     storage: storage,
     limits: {
-        fileSize: 5 * 1024 * 1024, // 5MB limit
+        fileSize: 4.5 * 1024 * 1024, // 4.5MB limit for Vercel
     },
     fileFilter: (req, file, cb) => {
         if (file.mimetype.startsWith('image/')) {
@@ -919,28 +919,46 @@ app.post('/api/conversations/:conversationId/avatar', requireAuth, upload.single
         }
 
         const { conversationId } = req.params;
-        const fileName = `${conversationId}_${uuidv4()}.jpg`;
-        const filePath = path.join(__dirname, 'uploads', 'conversations', fileName);
+        const bucket = process.env.SUPABASE_AVATAR_BUCKET || 'profile_pic'; // Reuse existing bucket or use a new one
+        const fileName = `conversations/${conversationId}_${uuidv4()}.jpg`;
 
-        // Ensure directory exists
-        const dir = path.dirname(filePath);
-        if (!fs.existsSync(dir)) {
-            fs.mkdirSync(dir, { recursive: true });
-        }
-
-        // Process and save image using sharp
-        await sharp(req.file.buffer)
+        // Process image using sharp
+        const processedBuffer = await sharp(req.file.buffer)
             .resize(150, 150, { fit: 'cover' })
             .jpeg({ quality: 85 })
-            .toFile(filePath);
+            .toBuffer();
+
+        // Upload to Supabase Storage
+        const { data: storageData, error: storageError } = await supabase.storage
+            .from(bucket)
+            .upload(fileName, processedBuffer, {
+                contentType: 'image/jpeg',
+                upsert: true
+            });
+
+        if (storageError) {
+            console.error('Error uploading conversation image to Supabase:', storageError);
+            return res.status(500).json({ error: `Storage error: ${storageError.message}` });
+        }
+
+        // Get Public URL
+        let publicUrl = null;
+        const { data: urlData } = supabase.storage
+            .from(bucket)
+            .getPublicUrl(storageData.path);
+        publicUrl = urlData?.publicUrl || null;
+
+        if (!publicUrl) {
+            const origin = supabaseUrl.replace(/\/auth.*$/, '').replace(/\/$/, '');
+            publicUrl = `${origin}/storage/v1/object/public/${bucket}/${storageData.path}`;
+        }
 
         // Update conversation avatar in settings
-        const avatarUrl = `/uploads/conversations/${fileName}`;
-        await database.updateConversationAvatar(conversationId, avatarUrl);
+        await database.updateConversationAvatar(conversationId, publicUrl);
 
         res.json({
             success: true,
-            avatarUrl: avatarUrl,
+            avatarUrl: publicUrl,
             message: 'Conversation image updated successfully'
         });
 
@@ -972,20 +990,42 @@ app.post('/api/conversations/:conversationId/generate-avatar', requireAuth, asyn
         // Generate a concise visual prompt
         const imagePrompt = await generateImagePrompt(messageText);
 
-        // For now, we'll create a placeholder image with the prompt text
-        // In a production environment, you would integrate with DALL-E, Midjourney, or Stable Diffusion
-        const fileName = `${conversationId}_generated_${uuidv4()}.jpg`;
-        const filePath = path.join(__dirname, 'uploads', 'conversations', fileName);
+        // Generate placeholder image buffer
+        const imageBuffer = await createPlaceholderImageBuffer(imagePrompt);
 
-        // Create a placeholder image with conversation theme
-        await createPlaceholderImage(imagePrompt, filePath);
+        const bucket = process.env.SUPABASE_AVATAR_BUCKET || 'profile_pic';
+        const fileName = `conversations/${conversationId}_generated_${uuidv4()}.jpg`;
 
-        const avatarUrl = `/uploads/conversations/${fileName}`;
-        await database.updateConversationAvatar(conversationId, avatarUrl);
+        // Upload to Supabase Storage
+        const { data: storageData, error: storageError } = await supabase.storage
+            .from(bucket)
+            .upload(fileName, imageBuffer, {
+                contentType: 'image/jpeg',
+                upsert: true
+            });
+
+        if (storageError) {
+            console.error('Error uploading generated avatar to Supabase:', storageError);
+            return res.status(500).json({ error: `Storage error: ${storageError.message}` });
+        }
+
+        // Get Public URL
+        let publicUrl = null;
+        const { data: urlData } = supabase.storage
+            .from(bucket)
+            .getPublicUrl(storageData.path);
+        publicUrl = urlData?.publicUrl || null;
+
+        if (!publicUrl) {
+            const origin = supabaseUrl.replace(/\/auth.*$/, '').replace(/\/$/, '');
+            publicUrl = `${origin}/storage/v1/object/public/${bucket}/${storageData.path}`;
+        }
+
+        await database.updateConversationAvatar(conversationId, publicUrl);
 
         res.json({
             success: true,
-            avatarUrl: avatarUrl,
+            avatarUrl: publicUrl,
             prompt: imagePrompt,
             message: 'AI-generated conversation image created successfully'
         });
@@ -1032,8 +1072,8 @@ async function generateImagePrompt(conversationText) {
     }
 }
 
-// Helper function to create placeholder image
-async function createPlaceholderImage(prompt, filePath) {
+// Helper function to create placeholder image buffer
+async function createPlaceholderImageBuffer(prompt) {
     // Create a colorful gradient placeholder image with the prompt overlay
     const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FECA57', '#FF9FF3'];
     const randomColor = colors[Math.floor(Math.random() * colors.length)];
@@ -1052,20 +1092,26 @@ async function createPlaceholderImage(prompt, filePath) {
         </svg>
     `;
 
-    await sharp(Buffer.from(svg))
+    return await sharp(Buffer.from(svg))
         .jpeg({ quality: 85 })
-        .toFile(filePath);
+        .toBuffer();
 }
 
 const PORT = process.env.PORT || 7001;
-app.listen(PORT, async () => {
-    console.log(`Server is running on port ${PORT}`);
 
-    // Test database connection on startup
-    const dbHealth = await database.healthCheck();
-    if (dbHealth) {
-        console.log('✅ Database connection successful');
-    } else {
-        console.log('❌ Database connection failed - check your Supabase credentials');
-    }
-});
+// Only listen if not running in Vercel (Vercel handles the server)
+if (require.main === module) {
+    app.listen(PORT, async () => {
+        console.log(`Server is running on port ${PORT}`);
+
+        // Test database connection on startup
+        const dbHealth = await database.healthCheck();
+        if (dbHealth) {
+            console.log('✅ Database connection successful');
+        } else {
+            console.log('❌ Database connection failed - check your Supabase credentials');
+        }
+    });
+}
+
+module.exports = app;
