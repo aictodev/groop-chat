@@ -5,12 +5,18 @@ const database = require('./database');
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_ANON_KEY;
 
-if (!supabaseUrl || !supabaseKey) {
-    console.error('Missing Supabase credentials for auth middleware');
-    process.exit(1);
-}
+let supabase = null;
 
-const supabase = createClient(supabaseUrl, supabaseKey);
+if (!supabaseUrl || !supabaseKey) {
+    console.warn('Missing Supabase credentials for auth middleware. Authentication will fail.');
+    // process.exit(1); // Do not exit, allow server to start
+} else {
+    try {
+        supabase = createClient(supabaseUrl, supabaseKey);
+    } catch (e) {
+        console.error('Failed to initialize Supabase auth client:', e);
+    }
+}
 
 // Middleware to verify JWT token from Supabase
 const authenticateUser = async (req, res, next) => {
@@ -22,6 +28,11 @@ const authenticateUser = async (req, res, next) => {
         }
 
         const token = authHeader.split(' ')[1];
+
+        if (!supabase) {
+            console.error('Supabase client not initialized');
+            return res.status(500).json({ error: 'Authentication service unavailable' });
+        }
 
         // Verify the JWT token with Supabase
         const { data: { user }, error } = await supabase.auth.getUser(token);
@@ -55,18 +66,20 @@ const optionalAuth = async (req, res, next) => {
 
         if (authHeader && authHeader.startsWith('Bearer ')) {
             const token = authHeader.split(' ')[1];
-            const { data: { user }, error } = await supabase.auth.getUser(token);
+            if (supabase) {
+                const { data: { user }, error } = await supabase.auth.getUser(token);
 
-            if (!error && user) {
-                // Ensure user exists in our custom users table
-                try {
-                    await database.ensureUserExists(user, token);
-                } catch (dbError) {
-                    console.error('Failed to ensure user exists (optional auth):', dbError);
-                    // Continue anyway - this shouldn't block optional authentication
+                if (!error && user) {
+                    // Ensure user exists in our custom users table
+                    try {
+                        await database.ensureUserExists(user, token);
+                    } catch (dbError) {
+                        console.error('Failed to ensure user exists (optional auth):', dbError);
+                        // Continue anyway - this shouldn't block optional authentication
+                    }
+                    req.user = user;
+                    req.authToken = token;
                 }
-                req.user = user;
-                req.authToken = token;
             }
         }
 
