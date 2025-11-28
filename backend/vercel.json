@@ -7,9 +7,16 @@
         },
         "api/debug.js": {
             "maxDuration": 10
+        },
+        "api/test_deps.js": {
+            "maxDuration": 10
         }
     },
     "rewrites": [
+        {
+            "source": "/test-deps",
+            "destination": "/api/test_deps"
+        },
         {
             "source": "/debug",
             "destination": "/api/debug"
