@@ -12,14 +12,5 @@
   "author": "",
   "license": "ISC",
   "type": "commonjs",
-  "dependencies": {
-    "@supabase/supabase-js": "^2.56.1",
-    "axios": "^1.11.0",
-    "cors": "^2.8.5",
-    "dotenv": "^16.4.5",
-    "express": "^4.21.1",
-    "multer": "^2.0.2",
-    "sharp": "^0.34.4",
-    "uuid": "^13.0.0"
-  }
+  "dependencies": {}
 }

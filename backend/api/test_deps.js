@@ -12,7 +12,8 @@ module.exports = (req, res) => {
     const tryLoad = (name) => {
         try {
             require(name);
-            report.results[name] = 'OK';
+            const resolvedPath = require.resolve(name);
+            report.results[name] = `OK (${resolvedPath})`;
         } catch (e) {
             report.results[name] = `FAILED: ${e.message}`;
         }
