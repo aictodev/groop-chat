@@ -1,4 +1,3 @@
-```json
 {
     "version": 2,
     "functions": {
@@ -16,9 +15,8 @@
             "destination": "/api/debug"
         },
         {
-            "src": "/(.*)",
-            "dest": "/api/index.js"
+            "source": "/(.*)",
+            "destination": "/api/index.js"
         }
     ]
 }
-```
