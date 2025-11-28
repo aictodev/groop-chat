@@ -13,8 +13,30 @@ try {
     console.error('Failed to load sharp:', e);
 }
 const { v4: uuidv4 } = require('uuid');
-const database = require('../database');
-const { authenticateUser, optionalAuth } = require('../auth');
+let database;
+let authenticateUser;
+let optionalAuth;
+
+try {
+    database = require('../database');
+} catch (e) {
+    console.error('Failed to load database module:', e);
+    database = {
+        healthCheck: async () => false,
+        getConversations: async () => [],
+        getUserPrompts: async () => []
+    };
+}
+
+try {
+    const authModule = require('../auth');
+    authenticateUser = authModule.authenticateUser;
+    optionalAuth = authModule.optionalAuth;
+} catch (e) {
+    console.error('Failed to load auth module:', e);
+    authenticateUser = (req, res, next) => next();
+    optionalAuth = (req, res, next) => next();
+}
 
 // Global error handler for uncaught exceptions
 process.on('uncaughtException', (err) => {
@@ -64,7 +86,14 @@ const API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const supabase = supabaseUrl && supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey) : null;
+let supabase = null;
+try {
+    if (supabaseUrl && supabaseServiceKey) {
+        supabase = createClient(supabaseUrl, supabaseServiceKey);
+    }
+} catch (e) {
+    console.error('Failed to initialize Supabase client:', e);
+}
 
 // Define the models participating in the chat
 const ALL_MODELS = [
@@ -164,25 +193,52 @@ async function getUserPromptOrDefault(userId, promptType) {
 /**
  * Health check endpoint - now includes database health
  */
-app.get('/health', async (req, res) => {
+app.get('/', async (req, res) => {
     const hasApiKey = Boolean(OPENROUTER_API_KEY);
-    const dbHealth = await database.healthCheck();
+    let dbHealth = false;
+    let dbError = null;
+
+    try {
+        if (database && database.healthCheck) {
+            dbHealth = await database.healthCheck();
+        }
+    } catch (e) {
+        dbError = e.message;
+    }
 
     // Test conversations table directly
     let conversationCount = 0;
+    let conversationError = null;
     try {
-        const conversations = await database.getConversations();
-        conversationCount = conversations.length;
+        if (database && database.getConversations) {
+            const conversations = await database.getConversations();
+            conversationCount = conversations ? conversations.length : 0;
+        }
     } catch (e) {
         console.error('Error testing conversations:', e);
+        conversationError = e.message;
     }
 
     res.json({
+        status: 'Backend is running',
         ok: hasApiKey && dbHealth,
         models: ALL_MODELS,
-        env: { hasApiKey, dbConnected: dbHealth },
-        version: '2.0.0',
-        debug: { conversationCount }
+        env: {
+            hasApiKey,
+            dbConnected: dbHealth,
+            supabaseUrlConfigured: Boolean(supabaseUrl),
+            supabaseKeyConfigured: Boolean(supabaseServiceKey)
+        },
+        diagnostics: {
+            dbError,
+            conversationError,
+            promptsDir: PROMPTS_DIR,
+            promptsLoaded: {
+                baseSystem: Boolean(BASE_SYSTEM_TPL),
+                uniqueness: Boolean(UNIQUENESS_TPL)
+            }
+        },
+        version: '2.1.0'
     });
 });
 
