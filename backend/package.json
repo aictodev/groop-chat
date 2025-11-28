@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "node api/index.js",
     "start": "NODE_ENV=production node api/index.js",
+    "postinstall": "npm install --no-save express cors axios multer uuid dotenv",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
