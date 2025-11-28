@@ -1,7 +1,8 @@
+```json
 {
     "version": 2,
     "functions": {
-        "index.js": {
+        "api/index.js": {
             "includeFiles": "prompts/**",
             "maxDuration": 60
         },
@@ -15,8 +16,9 @@
             "destination": "/api/debug"
         },
         {
-            "source": "/(.*)",
-            "destination": "/index.js"
+            "src": "/(.*)",
+            "dest": "/api/index.js"
         }
     ]
 }
+```

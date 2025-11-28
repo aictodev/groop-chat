@@ -1,4 +1,4 @@
-require('dotenv').config();
+require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
 const express = require('express');
 const axios = require('axios');
 const cors = require('cors');
@@ -13,8 +13,8 @@ try {
     console.error('Failed to load sharp:', e);
 }
 const { v4: uuidv4 } = require('uuid');
-const database = require('./database');
-const { authenticateUser, optionalAuth } = require('./auth');
+const database = require('../database');
+const { authenticateUser, optionalAuth } = require('../auth');
 
 // Global error handler for uncaught exceptions
 process.on('uncaughtException', (err) => {
@@ -39,7 +39,7 @@ app.get('/', (req, res) => {
 });
 
 // Serve static files from uploads directory
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 // Configure multer for file uploads
 const storage = multer.memoryStorage();
@@ -91,7 +91,7 @@ const MODEL_DETAILS = {
 };
 
 // --- Load prompt templates ---
-const PROMPTS_DIR = path.join(__dirname, 'prompts');
+const PROMPTS_DIR = path.join(__dirname, '../prompts');
 function loadTemplate(filename) {
     try {
         return fs.readFileSync(path.join(PROMPTS_DIR, filename), 'utf8');
