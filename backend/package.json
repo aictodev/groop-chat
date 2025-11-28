@@ -2,10 +2,10 @@
   "name": "backend",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "api/index.js",
   "scripts": {
-    "dev": "node index.js",
-    "start": "NODE_ENV=production node index.js",
+    "dev": "node api/index.js",
+    "start": "NODE_ENV=production node api/index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
