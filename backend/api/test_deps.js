@@ -1,6 +1,11 @@
 module.exports = (req, res) => {
     const report = {
         status: 'Checking dependencies',
+        paths: {
+            cwd: process.cwd(),
+            dirname: __dirname,
+            env: process.env.NODE_ENV
+        },
         results: {}
     };
 
