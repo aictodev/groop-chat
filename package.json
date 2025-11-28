@@ -42,6 +42,12 @@
   ],
   "dependencies": {
     "@supabase/supabase-js": "^2.57.4",
-    "dotenv": "^17.2.2"
+    "dotenv": "^17.2.2",
+    "express": "^4.21.1",
+    "cors": "^2.8.5",
+    "axios": "^1.11.0",
+    "multer": "^2.0.2",
+    "uuid": "^13.0.0",
+    "sharp": "^0.34.4"
   }
 }
