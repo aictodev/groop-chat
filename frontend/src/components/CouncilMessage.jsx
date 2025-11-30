@@ -64,10 +64,12 @@ const CouncilMessage = ({ msg }) => {
         <div className="chat-message chat-message--incoming w-full max-w-4xl bg-white rounded-lg shadow-sm border border-whatsapp-divider overflow-hidden">
             {/* Header */}
             <div className="bg-[#f0f2f5] px-4 py-3 border-b border-whatsapp-divider flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-white font-bold text-xs">
-                        LC
-                    </div>
+                <div className="flex items-center gap-3">
+                    <img
+                        src="/karpathy-mode.png"
+                        alt="Council"
+                        className="w-8 h-8 rounded-full object-cover border border-gray-200"
+                    />
                     <div>
                         <h3 className="font-semibold text-whatsapp-ink text-sm">LLM Council</h3>
                         <p className="text-xs text-whatsapp-ink-subtle">

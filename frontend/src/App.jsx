@@ -1457,13 +1457,17 @@ function App() {
                                                 type="button"
                                                 onClick={() => setIsCouncilMode(!isCouncilMode)}
                                                 className={cn(
-                                                    "p-2 rounded-full transition-colors flex items-center gap-1",
-                                                    isCouncilMode ? "bg-indigo-100 text-indigo-600 ring-1 ring-indigo-200" : "text-gray-400 hover:bg-gray-100"
+                                                    "p-1.5 rounded-full transition-colors flex items-center gap-1.5 border",
+                                                    isCouncilMode ? "bg-indigo-50 border-indigo-200" : "border-transparent hover:bg-gray-100"
                                                 )}
                                                 title={isCouncilMode ? "Council Mode Active" : "Enable Council Mode"}
                                             >
-                                                <span className="text-sm">⚖️</span>
-                                                {isCouncilMode && <span className="text-xs font-bold pr-1">Council</span>}
+                                                <img
+                                                    src="/karpathy-mode.png"
+                                                    alt="Council Mode"
+                                                    className={cn("w-6 h-6 rounded-full object-cover", isCouncilMode ? "opacity-100" : "opacity-70 grayscale hover:grayscale-0")}
+                                                />
+                                                {isCouncilMode && <span className="text-xs font-bold text-indigo-700 pr-1">Council</span>}
                                             </button>
                                             <Button
                                                 variant="whatsapp-icon"
