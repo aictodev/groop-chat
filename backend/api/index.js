@@ -38,7 +38,7 @@ try {
     optionalAuth = (req, res, next) => next();
 }
 
-const { handleCouncilRequest } = require('../controllers/council');
+// const { handleCouncilRequest } = require('../controllers/council');
 
 // Global error handler for uncaught exceptions
 process.on('uncaughtException', (err) => {
@@ -531,6 +531,314 @@ Return ONLY the title, no quotes or extra text.`;
         res.json({ title: 'New Chat' });
     }
 });
+
+/**
+ * LLM Council Endpoint
+ */
+// --- LLM Council Logic (Inlined for Vercel Compatibility) ---
+
+// Helper: Call OpenRouter (Replicated for isolation)
+async function callOpenRouterForCouncil(model, prompt, history = [], maxLength = 2000, systemPrompt = '') {
+    try {
+        const messages = [
+            ...(systemPrompt ? [{ role: 'system', content: systemPrompt }] : []),
+            ...history,
+            { role: 'user', content: prompt }
+        ];
+
+        const headers = {
+            'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+            'Content-Type': 'application/json',
+            'HTTP-Referer': process.env.APP_REFERER || 'http://localhost:5173',
+            'X-Title': process.env.APP_TITLE || 'AI Group Chat',
+        };
+
+        const payload = {
+            model: model,
+            messages,
+        };
+
+        if (typeof maxLength === 'number' && Number.isFinite(maxLength) && maxLength > 0) {
+            payload.max_tokens = Math.max(1, Math.ceil(maxLength / 4));
+        }
+
+        const response = await axios.post(API_URL, payload, { headers });
+        return response.data.choices[0].message.content.trim();
+    } catch (error) {
+        console.error(`Error calling model ${model}:`, error.message);
+        return null;
+    }
+}
+
+// Stage 1: Collect individual responses
+async function stage1_collect_responses(userQuery, models, history, res, conversationId, userId, userMessageId) {
+    res.write(`data: ${JSON.stringify({ type: 'stage1_start', models })}\n\n`);
+
+    const promises = models.map(async (model) => {
+        const response = await callOpenRouterForCouncil(model, userQuery, history, 2000);
+        if (response) {
+            res.write(`data: ${JSON.stringify({
+                type: 'stage1_result',
+                model,
+                response
+            })}\n\n`);
+            try {
+                await database.createAIMessage(
+                    response,
+                    model,
+                    false,
+                    conversationId,
+                    userMessageId,
+                    'council',
+                    userId
+                );
+            } catch (err) {
+                console.warn('Failed to persist Stage 1 council message:', err?.message || err);
+            }
+            return { model, response };
+        }
+        return null;
+    });
+
+    const results = await Promise.all(promises);
+    return results.filter(r => r !== null);
+}
+
+// Stage 2: Review and Rank
+async function stage2_collect_rankings(userQuery, stage1Results, res, conversationId, userId) {
+    res.write(`data: ${JSON.stringify({ type: 'stage2_start' })}\n\n`);
+
+    const labels = stage1Results.map((_, i) => String.fromCharCode(65 + i)); // A, B, C...
+    const labelToModel = {};
+    stage1Results.forEach((result, i) => {
+        labelToModel[`Response ${labels[i]}`] = result.model;
+    });
+
+    const responsesText = stage1Results.map((result, i) =>
+        `Response ${labels[i]}:\n${result.response}`
+    ).join('\n\n');
+
+    const rankingPrompt = `You are evaluating different responses to the following question:
+
+Question: ${userQuery}
+
+Here are the responses from different models (anonymized):
+
+${responsesText}
+
+Your task:
+1. First, evaluate each response individually. For each response, explain what it does well and what it does poorly.
+2. Then, at the very end of your response, provide a final ranking.
+
+IMPORTANT: Your final ranking MUST be formatted EXACTLY as follows:
+- Start with the line "FINAL RANKING:" (all caps, with colon)
+- Then list the responses from best to worst as a numbered list
+- Each line should be: number, period, space, then ONLY the response label (e.g., "1. Response A")
+- Do not add any other text or explanations in the ranking section
+
+Example of the correct format for your ENTIRE response:
+
+Response A provides good detail on X but misses Y...
+Response B is accurate but lacks depth on Z...
+Response C offers the most comprehensive answer...
+
+FINAL RANKING:
+1. Response C
+2. Response A
+3. Response B
+
+Now provide your evaluation and ranking:`;
+
+    const participatingModels = stage1Results.map(r => r.model);
+
+    const promises = participatingModels.map(async (model) => {
+        const response = await callOpenRouterForCouncil(model, rankingPrompt, [], 2000);
+        if (response) {
+            res.write(`data: ${JSON.stringify({
+                type: 'stage2_result',
+                model,
+                ranking: response
+            })}\n\n`);
+            try {
+                await database.createAIMessage(
+                    response,
+                    model,
+                    false,
+                    conversationId,
+                    null,
+                    'council',
+                    userId
+                );
+            } catch (err) {
+                console.warn('Failed to persist Stage 2 council ranking:', err?.message || err);
+            }
+            return { model, ranking: response };
+        }
+        return null;
+    });
+
+    const results = await Promise.all(promises);
+    return {
+        rankings: results.filter(r => r !== null),
+        labelToModel
+    };
+}
+
+// Stage 3: Synthesize
+async function stage3_synthesize_final(userQuery, stage1Results, stage2Results, res, conversationId, userId, userMessageId) {
+    res.write(`data: ${JSON.stringify({ type: 'stage3_start' })}\n\n`);
+
+    const stage1Text = stage1Results.map(r =>
+        `Model: ${r.model}\nResponse: ${r.response}`
+    ).join('\n\n');
+
+    const stage2Text = stage2Results.map(r =>
+        `Model: ${r.model}\nRanking: ${r.ranking}`
+    ).join('\n\n');
+
+    const CHAIRMAN_MODEL = 'openai/gpt-4o-mini';
+    const chairmanPrompt = `You are the Chairman of an LLM Council. Multiple AI models have provided responses to a user's question, and then ranked each other's responses.
+
+Original Question: ${userQuery}
+
+STAGE 1 - Individual Responses:
+${stage1Text}
+
+STAGE 2 - Peer Rankings:
+${stage2Text}
+
+Your task as Chairman is to synthesize all of this information into a single, comprehensive, accurate answer to the user's original question. Consider:
+- The individual responses and their insights
+- The peer rankings and what they reveal about response quality
+- Any patterns of agreement or disagreement
+
+Provide a clear, well-reasoned final answer that represents the council's collective wisdom:`;
+
+    const response = await callOpenRouterForCouncil(CHAIRMAN_MODEL, chairmanPrompt, [], 4000);
+
+    if (response) {
+        res.write(`data: ${JSON.stringify({
+            type: 'stage3_result',
+            model: CHAIRMAN_MODEL,
+            response
+        })}\n\n`);
+        try {
+            await database.createAIMessage(
+                response,
+                CHAIRMAN_MODEL,
+                false,
+                conversationId,
+                userMessageId,
+                'council',
+                userId
+            );
+        } catch (err) {
+            console.warn('Failed to persist Stage 3 council synthesis:', err?.message || err);
+        }
+    } else {
+        res.write(`data: ${JSON.stringify({
+            type: 'error',
+            message: 'Chairman failed to synthesize response.'
+        })}\n\n`);
+    }
+}
+
+// Main Council Handler
+async function handleCouncilRequest(req, res) {
+    console.log('[Council] Request received');
+    const { prompt, selectedModels, conversationId } = req.body;
+    const userId = req.user?.id || FALLBACK_USER_ID;
+
+    if (!prompt) {
+        return res.status(400).json({ error: 'Prompt is required' });
+    }
+
+    if (!selectedModels || selectedModels.length < 2) {
+        return res.status(400).json({ error: 'At least 2 models are required for a council.' });
+    }
+
+    res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'Access-Control-Allow-Origin': '*',
+    });
+
+    try {
+        let targetConversationId = conversationId;
+        if (!targetConversationId) {
+            const newConv = await database.createConversationForUser(userId, 'New Chat', req.authToken);
+            targetConversationId = newConv?.id;
+        }
+
+        let userMessageId = null;
+        try {
+            const userMsg = await database.createUserMessage(
+                prompt,
+                targetConversationId,
+                null,
+                'council',
+                userId
+            );
+            userMessageId = userMsg?.id || null;
+        } catch (err) {
+            console.warn('Failed to persist council user message:', err?.message || err);
+        }
+
+        let history = [];
+        if (targetConversationId) {
+            try {
+                const context = await database.getConversationContext(targetConversationId, 10, userId);
+                history = context.map(msg => ({
+                    role: msg.sender_type === 'user' ? 'user' : 'assistant',
+                    content: msg.content
+                }));
+            } catch (err) {
+                console.warn('Failed to fetch conversation context for council:', err);
+            }
+        }
+
+        const stage1Results = await stage1_collect_responses(
+            prompt,
+            selectedModels,
+            history,
+            res,
+            targetConversationId,
+            userId,
+            userMessageId
+        );
+
+        if (stage1Results.length === 0) {
+            throw new Error('All models failed to respond in Stage 1.');
+        }
+
+        const { rankings: stage2Results, labelToModel } = await stage2_collect_rankings(
+            prompt,
+            stage1Results,
+            res,
+            targetConversationId,
+            userId
+        );
+
+        await stage3_synthesize_final(
+            prompt,
+            stage1Results,
+            stage2Results,
+            res,
+            targetConversationId,
+            userId,
+            userMessageId
+        );
+
+        res.write(`data: ${JSON.stringify({ type: 'complete' })}\n\n`);
+        res.end();
+
+    } catch (error) {
+        console.error('Council Error:', error);
+        res.write(`data: ${JSON.stringify({ type: 'error', message: error.message })}\n\n`);
+        res.end();
+    }
+}
 
 /**
  * LLM Council Endpoint
