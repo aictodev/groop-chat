@@ -2,10 +2,21 @@ const axios = require('axios');
 const path = require('path');
 require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
 
+let database;
+try {
+    database = require('../database');
+} catch (e) {
+    console.error('Failed to load database module in council.js:', e);
+    database = {
+        getConversationContext: async () => []
+    };
+}
+
 // Configuration
 const OPENROUTER_API_KEY = (process.env.OPENROUTER_API_KEY || '').trim();
 const API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const CHAIRMAN_MODEL = 'openai/gpt-4o-mini'; // Default chairman
+const FALLBACK_USER_ID = '00000000-0000-0000-0000-000000000001';
 
 // Helper: Call OpenRouter (Replicated from index.js for isolation)
 async function callOpenRouter(model, prompt, history = [], maxLength = 2000, systemPrompt = '') {
@@ -42,11 +53,11 @@ async function callOpenRouter(model, prompt, history = [], maxLength = 2000, sys
 }
 
 // Stage 1: Collect individual responses
-async function stage1_collect_responses(userQuery, models, res) {
+async function stage1_collect_responses(userQuery, models, history, res) {
     res.write(`data: ${JSON.stringify({ type: 'stage1_start', models })}\n\n`);
 
     const promises = models.map(async (model) => {
-        const response = await callOpenRouter(model, userQuery, [], 2000);
+        const response = await callOpenRouter(model, userQuery, history, 2000);
         if (response) {
             res.write(`data: ${JSON.stringify({
                 type: 'stage1_result',
@@ -161,7 +172,7 @@ Your task as Chairman is to synthesize all of this information into a single, co
 Provide a clear, well-reasoned final answer that represents the council's collective wisdom:`;
 
     // Stream the chairman's response
-    // Note: For simplicity in this v1, we'll just wait for the full response and send it. 
+    // Note: For simplicity in this v1, we'll just wait for the full response and send it.
     // Ideally we would stream this too, but our callOpenRouter helper is not streaming-enabled yet.
     // We can update callOpenRouter to support streaming later if needed.
 
@@ -183,7 +194,8 @@ Provide a clear, well-reasoned final answer that represents the council's collec
 
 // Main Handler
 async function handleCouncilRequest(req, res) {
-    const { prompt, selectedModels } = req.body;
+    const { prompt, selectedModels, conversationId } = req.body;
+    const userId = req.user?.id || FALLBACK_USER_ID;
 
     if (!prompt) {
         return res.status(400).json({ error: 'Prompt is required' });
@@ -202,8 +214,22 @@ async function handleCouncilRequest(req, res) {
     });
 
     try {
+        // Fetch context if conversationId is present
+        let history = [];
+        if (conversationId) {
+            try {
+                const context = await database.getConversationContext(conversationId, 10, userId);
+                history = context.map(msg => ({
+                    role: msg.sender_type === 'user' ? 'user' : 'assistant',
+                    content: msg.content
+                }));
+            } catch (err) {
+                console.warn('Failed to fetch conversation context for council:', err);
+            }
+        }
+
         // Stage 1
-        const stage1Results = await stage1_collect_responses(prompt, selectedModels, res);
+        const stage1Results = await stage1_collect_responses(prompt, selectedModels, history, res);
 
         if (stage1Results.length === 0) {
             throw new Error('All models failed to respond in Stage 1.');
