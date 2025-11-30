@@ -5,6 +5,7 @@ import ModelManager from './components/ModelManager';
 import ProfilePictureUpload from './components/ProfilePictureUpload';
 import EditableDisplayName from './components/EditableDisplayName';
 import Landing from './components/Landing';
+import CouncilMessage from './components/CouncilMessage';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -127,6 +128,7 @@ function App() {
     const [editingPrompt, setEditingPrompt] = useState(null);
     const [characterLimit, setCharacterLimit] = useState(280);
     const [selectedModels, setSelectedModels] = useState(MODELS.map(m => m.id));
+    const [isCouncilMode, setIsCouncilMode] = useState(false);
     const [mentionTarget, setMentionTarget] = useState(null);
     const [mentionSuggestions, setMentionSuggestions] = useState([]);
     const [isMentionMenuOpen, setIsMentionMenuOpen] = useState(false);
@@ -880,6 +882,85 @@ function App() {
                 }, { persist: false });
                 break;
             }
+
+            // --- Council Mode Events ---
+            case 'stage1_start': {
+                const councilMsg = {
+                    id: `council_${Date.now()}`,
+                    sender: 'council',
+                    time: new Date(),
+                    stages: {
+                        1: { status: 'loading', results: [] },
+                        2: { status: 'pending', rankings: [] },
+                        3: { status: 'pending', response: null }
+                    }
+                };
+                appendMessage(councilMsg, { persist: false }); // Don't persist complex objects yet
+                break;
+            }
+            case 'stage1_result': {
+                setMessages(prev => {
+                    const last = prev[prev.length - 1];
+                    if (last?.sender !== 'council') return prev;
+
+                    const updated = { ...last, stages: { ...last.stages } };
+                    updated.stages[1] = {
+                        ...updated.stages[1],
+                        results: [...updated.stages[1].results, { model: data.model, response: data.response }]
+                    };
+                    return [...prev.slice(0, -1), updated];
+                });
+                break;
+            }
+            case 'stage2_start': {
+                setMessages(prev => {
+                    const last = prev[prev.length - 1];
+                    if (last?.sender !== 'council') return prev;
+
+                    const updated = { ...last, stages: { ...last.stages } };
+                    updated.stages[1].status = 'done';
+                    updated.stages[2] = { ...updated.stages[2], status: 'loading' };
+                    return [...prev.slice(0, -1), updated];
+                });
+                break;
+            }
+            case 'stage2_result': {
+                setMessages(prev => {
+                    const last = prev[prev.length - 1];
+                    if (last?.sender !== 'council') return prev;
+
+                    const updated = { ...last, stages: { ...last.stages } };
+                    updated.stages[2] = {
+                        ...updated.stages[2],
+                        rankings: [...updated.stages[2].rankings, { model: data.model, ranking: data.ranking }]
+                    };
+                    return [...prev.slice(0, -1), updated];
+                });
+                break;
+            }
+            case 'stage3_start': {
+                setMessages(prev => {
+                    const last = prev[prev.length - 1];
+                    if (last?.sender !== 'council') return prev;
+
+                    const updated = { ...last, stages: { ...last.stages } };
+                    updated.stages[2].status = 'done';
+                    updated.stages[3] = { ...updated.stages[3], status: 'loading' };
+                    return [...prev.slice(0, -1), updated];
+                });
+                break;
+            }
+            case 'stage3_result': {
+                setMessages(prev => {
+                    const last = prev[prev.length - 1];
+                    if (last?.sender !== 'council') return prev;
+
+                    const updated = { ...last, stages: { ...last.stages } };
+                    updated.stages[3] = { ...updated.stages[3], status: 'done', response: data.response };
+                    return [...prev.slice(0, -1), updated];
+                });
+                break;
+            }
         }
     };
 
@@ -1027,19 +1108,27 @@ function App() {
         }
 
         try {
+            let url = `${BACKEND_URL}/api/chat`;
+            let body = {
+                prompt: promptToSend,
+                firstResponder,
+                conversationId: activeConversationId,
+                replyToMessageId: replyToId,
+                conversationMode: currentMode,
+                characterLimit: characterLimit,
+                selectedModels: modelsForRequest
+            };
+
+            if (isCouncilMode) {
+                url = `${BACKEND_URL}/api/council`;
+                // Council mode specific body if needed, currently shares structure
+            }
+
             // Use fetch with streaming instead of EventSource for POST data
-            const response = await fetch(`${BACKEND_URL}/api/chat`, {
+            const response = await fetch(url, {
                 method: 'POST',
                 headers: getAuthHeaders(),
-                body: JSON.stringify({
-                    prompt: promptToSend,
-                    firstResponder,
-                    conversationId: activeConversationId,
-                    replyToMessageId: replyToId,
-                    conversationMode: currentMode,
-                    characterLimit: characterLimit,
-                    selectedModels: modelsForRequest
-                })
+                body: JSON.stringify(body)
             });
 
             if (!response.ok) {
@@ -1278,11 +1367,15 @@ function App() {
                                         </div>
                                     ) : (
                                         messages.map((msg) => (
-                                            <MessageBubble
-                                                key={msg.id || `${msg.sender}-${msg.time}-${msg.model}`}
-                                                msg={msg}
-                                                onReply={handleReplyToMessage}
-                                            />
+                                            msg.sender === 'council' ? (
+                                                <CouncilMessage key={msg.id} msg={msg} />
+                                            ) : (
+                                                <MessageBubble
+                                                    key={msg.id || `${msg.sender}-${msg.time}-${msg.model}`}
+                                                    msg={msg}
+                                                    onReply={handleReplyToMessage}
+                                                />
+                                            )
                                         ))
                                     )}
                                     {isLoading && typingModel && (
@@ -1360,6 +1453,18 @@ function App() {
                                                     className="w-20 rounded-md border border-whatsapp-divider bg-white/90 px-2 py-1 text-xs text-whatsapp-ink focus:border-whatsapp-accent focus:outline-none"
                                                 />
                                             </label>
+                                            <button
+                                                type="button"
+                                                onClick={() => setIsCouncilMode(!isCouncilMode)}
+                                                className={cn(
+                                                    "p-2 rounded-full transition-colors flex items-center gap-1",
+                                                    isCouncilMode ? "bg-indigo-100 text-indigo-600 ring-1 ring-indigo-200" : "text-gray-400 hover:bg-gray-100"
+                                                )}
+                                                title={isCouncilMode ? "Council Mode Active" : "Enable Council Mode"}
+                                            >
+                                                <span className="text-sm">⚖️</span>
+                                                {isCouncilMode && <span className="text-xs font-bold pr-1">Council</span>}
+                                            </button>
                                             <Button
                                                 variant="whatsapp-icon"
                                                 size="whatsapp-icon"

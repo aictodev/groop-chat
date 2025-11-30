@@ -1,0 +1,23 @@
+{
+  "name": "ai-group-chat-backend",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Serverless backend for AI Group Chat",
+  "main": "api/index.js",
+  "scripts": {
+    "dev": "node api/index.js",
+    "start": "node api/index.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.57.4",
+    "axios": "^1.11.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.1",
+    "multer": "^2.0.2",
+    "sharp": "^0.34.4"
+  }
+}

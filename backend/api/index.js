@@ -1,10 +1,10 @@
+const path = require('path');
 require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
 const express = require('express');
 const axios = require('axios');
 const cors = require('cors');
 const { createClient } = require('@supabase/supabase-js');
 const fs = require('fs');
-const path = require('path');
 const multer = require('multer');
 let sharp;
 try {
@@ -12,7 +12,7 @@ try {
 } catch (e) {
     console.error('Failed to load sharp:', e);
 }
-const { v4: uuidv4 } = require('uuid');
+const { randomUUID } = require('crypto');
 let database;
 let authenticateUser;
 let optionalAuth;
@@ -37,6 +37,8 @@ try {
     authenticateUser = (req, res, next) => next();
     optionalAuth = (req, res, next) => next();
 }
+
+const { handleCouncilRequest } = require('./council');
 
 // Global error handler for uncaught exceptions
 process.on('uncaughtException', (err) => {
@@ -527,6 +529,11 @@ Return ONLY the title, no quotes or extra text.`;
 });
 
 /**
+ * LLM Council Endpoint
+ */
+app.post('/api/council', optionalAuth, handleCouncilRequest);
+
+/**
  * Enhanced chat endpoint with conversation modes and reply support
  */
 app.post('/api/chat', optionalAuth, async (req, res) => {
@@ -905,7 +912,7 @@ app.post('/api/profile/avatar', optionalAuth, upload.single('avatar'), async (re
 
         const bucket = process.env.SUPABASE_AVATAR_BUCKET || 'profile_pic';
 
-        const fileName = `${userId}_${uuidv4()}.jpg`;
+        const fileName = `${userId}_${randomUUID()}.jpg`;
 
         const processedBuffer = await sharp(req.file.buffer)
             .resize(200, 200, { fit: 'cover' })
@@ -996,7 +1003,7 @@ app.post('/api/conversations/:conversationId/avatar', requireAuth, upload.single
 
         const { conversationId } = req.params;
         const bucket = process.env.SUPABASE_AVATAR_BUCKET || 'profile_pic'; // Reuse existing bucket or use a new one
-        const fileName = `conversations/${conversationId}_${uuidv4()}.jpg`;
+        const fileName = `conversations/${conversationId}_${randomUUID()}.jpg`;
 
         // Process image using sharp
         const processedBuffer = await sharp(req.file.buffer)
@@ -1070,7 +1077,7 @@ app.post('/api/conversations/:conversationId/generate-avatar', requireAuth, asyn
         const imageBuffer = await createPlaceholderImageBuffer(imagePrompt);
 
         const bucket = process.env.SUPABASE_AVATAR_BUCKET || 'profile_pic';
-        const fileName = `conversations/${conversationId}_generated_${uuidv4()}.jpg`;
+        const fileName = `conversations/${conversationId}_generated_${randomUUID()}.jpg`;
 
         // Upload to Supabase Storage
         const { data: storageData, error: storageError } = await supabase.storage

@@ -4,45 +4,33 @@ module.exports = (req, res) => {
         paths: {
             cwd: process.cwd(),
             dirname: __dirname,
-            env: process.env.NODE_ENV
+            env: process.env.NODE_ENV,
+            node: process.version
         },
         results: {}
     };
 
-    const tryLoad = (name) => {
+    const check = (label, requirePath) => {
         try {
-            require(name);
-            const resolvedPath = require.resolve(name);
-            report.results[name] = `OK (${resolvedPath})`;
+            const resolvedPath = require.resolve(requirePath);
+            require(requirePath);
+            report.results[label] = `OK (${resolvedPath})`;
         } catch (e) {
-            report.results[name] = `FAILED: ${e.message}`;
+            report.results[label] = `FAILED: ${e.message}`;
         }
     };
 
-    tryLoad('express');
-    tryLoad('cors');
-    tryLoad('axios');
-    tryLoad('multer');
-    tryLoad('uuid');
-    tryLoad('dotenv');
-    tryLoad('@supabase/supabase-js');
-    tryLoad('fs');
-    tryLoad('path');
-
-    // Try to load local modules
-    try {
-        require('../database');
-        report.results['./database'] = 'OK';
-    } catch (e) {
-        report.results['./database'] = `FAILED: ${e.message}`;
-    }
-
-    try {
-        require('../auth');
-        report.results['./auth'] = 'OK';
-    } catch (e) {
-        report.results['./auth'] = `FAILED: ${e.message}`;
-    }
+    // Direct string requires so Vercel bundler includes them
+    check('express', 'express');
+    check('cors', 'cors');
+    check('axios', 'axios');
+    check('multer', 'multer');
+    check('dotenv', 'dotenv');
+    check('@supabase/supabase-js', '@supabase/supabase-js');
+    check('sharp', 'sharp');
+    check('fs', 'fs');
+    check('path', 'path');
+    report.note = 'Local modules are bundled only with the main handler; this check focuses on external deps.';
 
     res.json(report);
 };
