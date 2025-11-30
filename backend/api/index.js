@@ -38,7 +38,7 @@ try {
     optionalAuth = (req, res, next) => next();
 }
 
-const { handleCouncilRequest } = require('./council');
+const { handleCouncilRequest } = require('../controllers/council');
 
 // Global error handler for uncaught exceptions
 process.on('uncaughtException', (err) => {
