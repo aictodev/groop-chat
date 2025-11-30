@@ -62,6 +62,10 @@ app.get('/', (req, res) => {
     res.send('Backend is running!');
 });
 
+app.get('/health', (req, res) => {
+    res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
 // Serve static files from uploads directory
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
@@ -1179,6 +1183,12 @@ async function createPlaceholderImageBuffer(prompt) {
         .jpeg({ quality: 85 })
         .toBuffer();
 }
+
+// Catch-all route for debugging 404s
+app.use((req, res) => {
+    console.log(`[404] Route not found: ${req.method} ${req.originalUrl}`);
+    res.status(404).json({ error: 'Route not found', path: req.originalUrl });
+});
 
 const PORT = process.env.PORT || 7001;
 

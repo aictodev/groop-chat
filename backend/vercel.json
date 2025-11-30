@@ -3,7 +3,7 @@
   "installCommand": "npm install",
   "functions": {
     "api/index.js": {
-      "includeFiles": "{prompts/**,controllers/**,node_modules/**}",
+      "includeFiles": "{prompts/**,controllers/**,node_modules/**,database.js,auth.js}",
       "maxDuration": 60
     },
     "api/debug.js": {
