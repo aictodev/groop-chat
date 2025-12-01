@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { cn } from "@/lib/utils";
-import { ChevronDown, ChevronRight, Check, Copy } from 'lucide-react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 
 const MarkdownRenderer = ({ content }) => (
     <ReactMarkdown
@@ -14,15 +13,14 @@ const MarkdownRenderer = ({ content }) => (
             ol: ({ node, ...props }) => <ol className="list-decimal pl-4 mb-2 space-y-1" {...props} />,
             li: ({ node, ...props }) => <li className="pl-1" {...props} />,
             code: ({ node, inline, className, children, ...props }) => {
-                const match = /language-(\w+)/.exec(className || '');
-                return !inline ? (
+                return inline ? (
+                    <code className="px-1 py-0.5 rounded bg-black/5 font-mono text-[0.9em]" {...props}>{children}</code>
+                ) : (
                     <div className="relative group my-2 rounded bg-black/10 border border-black/5">
                         <pre className="p-2 overflow-x-auto text-xs font-mono bg-transparent m-0">
                             <code className={className} {...props}>{children}</code>
                         </pre>
                     </div>
-                ) : (
-                    <code className="px-1 py-0.5 rounded bg-black/5 font-mono text-[0.9em]" {...props}>{children}</code>
                 );
             },
         }}
@@ -32,7 +30,7 @@ const MarkdownRenderer = ({ content }) => (
 );
 
 const CouncilMessage = ({ msg }) => {
-    const [activeTab, setActiveTab] = useState('synthesis'); // 'synthesis', 'responses', 'rankings'
+    const [showThoughts, setShowThoughts] = useState(false);
     const [expandedRankings, setExpandedRankings] = useState({});
 
     const { stages } = msg;
@@ -50,15 +48,6 @@ const CouncilMessage = ({ msg }) => {
             [model]: !prev[model]
         }));
     };
-
-    // Determine which tab to show by default if synthesis is not ready
-    React.useEffect(() => {
-        if (!stage3.response && stage1.results?.length > 0 && activeTab === 'synthesis') {
-            setActiveTab('responses');
-        } else if (stage3.response && activeTab !== 'synthesis') {
-            setActiveTab('synthesis');
-        }
-    }, [stage3.response, stage1.results?.length]);
 
     return (
         <div className="chat-message chat-message--incoming w-full max-w-4xl bg-white rounded-lg shadow-sm border border-whatsapp-divider overflow-hidden">
@@ -79,125 +68,99 @@ const CouncilMessage = ({ msg }) => {
                         </p>
                     </div>
                 </div>
-                {/* Tabs */}
-                <div className="flex bg-white rounded-lg p-1 border border-whatsapp-divider">
-                    <button
-                        onClick={() => setActiveTab('responses')}
-                        className={cn(
-                            "px-3 py-1.5 text-xs font-medium rounded-md transition-colors",
-                            activeTab === 'responses' ? "bg-indigo-50 text-indigo-700" : "text-gray-600 hover:bg-gray-50"
-                        )}
-                    >
-                        1. Opinions ({stage1.results?.length || 0})
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('rankings')}
-                        className={cn(
-                            "px-3 py-1.5 text-xs font-medium rounded-md transition-colors",
-                            activeTab === 'rankings' ? "bg-indigo-50 text-indigo-700" : "text-gray-600 hover:bg-gray-50"
-                        )}
-                    >
-                        2. Review
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('synthesis')}
-                        className={cn(
-                            "px-3 py-1.5 text-xs font-medium rounded-md transition-colors",
-                            activeTab === 'synthesis' ? "bg-indigo-50 text-indigo-700" : "text-gray-600 hover:bg-gray-50"
-                        )}
-                    >
-                        3. Verdict
-                    </button>
-                </div>
+                <button
+                    onClick={() => setShowThoughts((s) => !s)}
+                    className="flex items-center gap-2 text-xs font-medium text-indigo-700 hover:text-indigo-800 bg-white rounded-md px-3 py-1.5 border border-indigo-100"
+                >
+                    {showThoughts ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                    {showThoughts ? 'Hide council thoughts' : 'Show council thoughts'}
+                </button>
             </div>
 
             {/* Content */}
             <div className="p-0 min-h-[200px]">
-                {activeTab === 'responses' && (
-                    <div className="divide-y divide-whatsapp-divider">
-                        {stage1.results?.map((result, idx) => (
-                            <div key={idx} className="p-4">
-                                <div className="flex items-center gap-2 mb-2">
-                                    <span className="font-semibold text-xs text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">
-                                        {result.model}
-                                    </span>
-                                    {stage2.labelToModel && (
-                                        <span className="text-xs text-gray-400">
-                                            (Response {String.fromCharCode(65 + idx)})
-                                        </span>
-                                    )}
+                <div className="p-6 bg-indigo-50/30 min-h-[200px]">
+                    {stage3.response ? (
+                        <>
+                            <div className="flex items-center gap-2 mb-4 pb-3 border-b border-indigo-100">
+                                <div className="w-6 h-6 rounded-full bg-indigo-600 flex items-center justify-center text-white text-xs">
+                                    C
                                 </div>
-                                <div className="prose prose-sm max-w-none text-whatsapp-ink">
-                                    <MarkdownRenderer content={result.response} />
-                                </div>
+                                <span className="font-semibold text-indigo-900 text-sm">Chairman's Final Verdict</span>
                             </div>
-                        ))}
-                        {isStage1Loading && (
-                            <div className="p-4 text-center text-gray-500 text-sm italic">
-                                Waiting for models to respond...
+                            <div className="prose prose-sm max-w-none text-whatsapp-ink">
+                                <MarkdownRenderer content={stage3.response} />
                             </div>
-                        )}
-                    </div>
-                )}
+                        </>
+                    ) : (
+                        <div className="flex flex-col items-center justify-center h-full py-8 text-center">
+                            <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center mb-3 animate-pulse">
+                                <span className="text-lg">⚖️</span>
+                            </div>
+                            <p className="text-sm text-gray-600">
+                                {isStage1Loading ? 'Gathering initial opinions...' :
+                                    isStage2Loading ? 'Debating and reviewing...' :
+                                        'Synthesizing final verdict...'}
+                            </p>
+                        </div>
+                    )}
+                </div>
 
-                {activeTab === 'rankings' && (
-                    <div className="divide-y divide-whatsapp-divider">
-                        {stage2.rankings?.length === 0 && (
-                            <div className="p-8 text-center text-gray-500 text-sm">
-                                {isStage2Loading ? 'Models are reviewing each other...' : 'No rankings available yet.'}
-                            </div>
-                        )}
-                        {stage2.rankings?.map((ranking, idx) => (
-                            <div key={idx} className="bg-white">
-                                <button
-                                    onClick={() => toggleRanking(ranking.model)}
-                                    className="w-full flex items-center justify-between p-4 hover:bg-gray-50 transition-colors text-left"
-                                >
-                                    <div className="flex items-center gap-2">
-                                        {expandedRankings[ranking.model] ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-                                        <span className="font-semibold text-sm text-whatsapp-ink">{ranking.model}</span>
-                                    </div>
-                                    <span className="text-xs text-gray-500">View Critique</span>
-                                </button>
-                                {expandedRankings[ranking.model] && (
-                                    <div className="px-4 pb-4 pl-8 bg-gray-50/50 border-t border-gray-100">
-                                        <div className="pt-3 prose prose-sm max-w-none text-whatsapp-ink-soft">
-                                            <MarkdownRenderer content={ranking.ranking} />
+                {showThoughts && (
+                    <div className="border-t border-whatsapp-divider bg-white">
+                        <div className="p-4">
+                            <p className="text-xs uppercase tracking-wide text-gray-500 mb-2">Stage 1 · Opinions</p>
+                            <div className="divide-y divide-whatsapp-divider">
+                                {stage1.results?.map((result, idx) => (
+                                    <div key={idx} className="py-3">
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <span className="font-semibold text-xs text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">
+                                                {result.model}
+                                            </span>
+                                            <span className="text-xs text-gray-400">Thought {idx + 1}</span>
                                         </div>
+                                        <div className="prose prose-sm max-w-none text-whatsapp-ink">
+                                            <MarkdownRenderer content={result.response} />
+                                        </div>
+                                    </div>
+                                ))}
+                                {isStage1Loading && (
+                                    <div className="py-3 text-gray-500 text-sm italic">
+                                        Waiting for models to respond...
                                     </div>
                                 )}
                             </div>
-                        ))}
-                    </div>
-                )}
+                        </div>
 
-                {activeTab === 'synthesis' && (
-                    <div className="p-6 bg-indigo-50/30 min-h-[300px]">
-                        {stage3.response ? (
-                            <>
-                                <div className="flex items-center gap-2 mb-4 pb-3 border-b border-indigo-100">
-                                    <div className="w-6 h-6 rounded-full bg-indigo-600 flex items-center justify-center text-white text-xs">
-                                        C
-                                    </div>
-                                    <span className="font-semibold text-indigo-900 text-sm">Chairman's Final Verdict</span>
+                        <div className="p-4 border-t border-whatsapp-divider">
+                            <p className="text-xs uppercase tracking-wide text-gray-500 mb-2">Stage 2 · Peer Review</p>
+                            {stage2.rankings?.length === 0 && (
+                                <div className="text-sm text-gray-500">
+                                    {isStage2Loading ? 'Models are reviewing each other...' : 'No rankings available yet.'}
                                 </div>
-                                <div className="prose prose-sm max-w-none text-whatsapp-ink">
-                                    <MarkdownRenderer content={stage3.response} />
+                            )}
+                            {stage2.rankings?.map((ranking, idx) => (
+                                <div key={idx} className="bg-white">
+                                    <button
+                                        onClick={() => toggleRanking(ranking.model)}
+                                        className="w-full flex items-center justify-between py-3 text-left"
+                                    >
+                                        <div className="flex items-center gap-2">
+                                            {expandedRankings[ranking.model] ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                                            <span className="font-semibold text-sm text-whatsapp-ink">{ranking.model}</span>
+                                        </div>
+                                        <span className="text-xs text-gray-500">View critique</span>
+                                    </button>
+                                    {expandedRankings[ranking.model] && (
+                                        <div className="pl-6 pb-3">
+                                            <div className="prose prose-sm max-w-none text-whatsapp-ink-soft">
+                                                <MarkdownRenderer content={ranking.ranking} />
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
-                            </>
-                        ) : (
-                            <div className="flex flex-col items-center justify-center h-full py-12 text-center">
-                                <div className="w-12 h-12 rounded-full bg-indigo-100 flex items-center justify-center mb-3 animate-pulse">
-                                    <span className="text-2xl">⚖️</span>
-                                </div>
-                                <h4 className="font-medium text-gray-900">Council is in session</h4>
-                                <p className="text-sm text-gray-500 mt-1 max-w-xs">
-                                    {isStage1Loading ? 'Gathering initial opinions...' :
-                                        isStage2Loading ? 'Debating and reviewing...' :
-                                            'Synthesizing final verdict...'}
-                                </p>
-                            </div>
-                        )}
+                            ))}
+                        </div>
                     </div>
                 )}
             </div>

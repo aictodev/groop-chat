@@ -959,6 +959,15 @@ function App() {
                     updated.stages[3] = { ...updated.stages[3], status: 'done', response: data.response };
                     return [...prev.slice(0, -1), updated];
                 });
+
+                const chairmanModel = data.chairmanModel || data.model || 'Chairman';
+                appendMessage({
+                    id: `council_final_${Date.now()}`,
+                    sender: 'ai',
+                    model: chairmanModel,
+                    text: data.response,
+                    time: new Date()
+                });
                 break;
             }
         }
