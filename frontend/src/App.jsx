@@ -719,9 +719,6 @@ function App() {
         }
     };
 
-    const refreshConversationsAfterDelete = async () => {
-        await loadConversations();
-    };
 
     const renameConversation = async (conversationId, newTitle) => {
         try {
@@ -764,7 +761,6 @@ function App() {
     const handleDeleteConversationForMe = async (conversationId) => {
         try {
             await deleteConversation(conversationId, 'me');
-            await refreshConversationsAfterDelete();
         } catch (error) {
             alert(error.message || 'Unable to delete chat for you');
         }
@@ -777,7 +773,6 @@ function App() {
         }
         try {
             await deleteConversation(conversationId, 'all');
-            await refreshConversationsAfterDelete();
         } catch (error) {
             alert(error.message || 'Unable to delete chat');
         }
@@ -850,11 +845,17 @@ function App() {
             });
             if (response.ok) {
                 const newConversation = await response.json();
+                setConversations((prev) => {
+                    const updated = [newConversation, ...prev];
+                    if (user?.id) {
+                        saveCachedConversations(user.id, updated);
+                    }
+                    return updated;
+                });
                 setActiveConversationId(newConversation.id);
-                await loadConversations(newConversation.id); // Refresh conversation list and focus the new one
+                setMessages([]);
                 setCurrentView('chat');
                 setIsSidebarOpen(false);
-                setMessages([]);
             }
         } catch (error) {
             console.error('Failed to create new conversation:', error);
