@@ -852,6 +852,9 @@ function App() {
                 const newConversation = await response.json();
                 setActiveConversationId(newConversation.id);
                 await loadConversations(newConversation.id); // Refresh conversation list and focus the new one
+                setCurrentView('chat');
+                setIsSidebarOpen(false);
+                setMessages([]);
             }
         } catch (error) {
             console.error('Failed to create new conversation:', error);
@@ -2053,12 +2056,12 @@ const ChatWindow = ({ messages, isLoading, chatEndRef }) => (
     </main>
 );
 
-const MessageBubble = ({ msg, onReply }) => {
-    const [isCopied, setIsCopied] = useState(false);
+    const MessageBubble = ({ msg, onReply }) => {
+        const [isCopied, setIsCopied] = useState(false);
 
-    const handleCopy = async () => {
-        try {
-            await navigator.clipboard.writeText(msg.text || '');
+        const handleCopy = async () => {
+            try {
+                await navigator.clipboard.writeText(msg.text || '');
             setIsCopied(true);
             setTimeout(() => setIsCopied(false), 2000);
         } catch (err) {
@@ -2135,23 +2138,23 @@ const MessageBubble = ({ msg, onReply }) => {
 
             <div className="chat-message__meta">
                 <span>{formatTime(msg.time)}</span>
-                {!isUser && (
-                    <div className="flex items-center gap-2">
-                        <button
-                            onClick={handleCopy}
-                            className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-black/5 rounded"
-                            title="Copy to clipboard"
-                        >
-                            {isCopied ? <Check className="w-3 h-3 text-green-600" /> : <Copy className="w-3 h-3 text-whatsapp-ink-subtle" />}
-                        </button>
+                <div className="flex items-center gap-2">
+                    <button
+                        onClick={handleCopy}
+                        className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-black/5 rounded"
+                        title="Copy to clipboard"
+                    >
+                        {isCopied ? <Check className="w-3 h-3 text-green-600" /> : <Copy className="w-3 h-3 text-whatsapp-ink-subtle" />}
+                    </button>
+                    {!isUser && (
                         <button
                             onClick={() => onReply(msg)}
                             className="text-whatsapp-ink-subtle hover:text-whatsapp-ink transition-colors"
                         >
                             Reply
                         </button>
-                    </div>
-                )}
+                    )}
+                </div>
             </div>
         </div>
     );
