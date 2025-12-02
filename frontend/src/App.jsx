@@ -524,6 +524,18 @@ function App() {
                         if (metadata.conversation_mode === 'direct' || metadata.is_direct_reply) {
                             processed.isDirectReply = true;
                         }
+                        if (metadata.conversation_mode) {
+                            processed.conversationMode = metadata.conversation_mode;
+                        }
+                        if (metadata.stage) {
+                            processed.stage = metadata.stage;
+                        }
+                        if (metadata.council_session_id) {
+                            processed.councilSessionId = metadata.council_session_id;
+                        }
+                        if (metadata.is_council_hidden) {
+                            processed.isCouncilHidden = true;
+                        }
                     } catch (metadataError) {
                         console.warn('Failed to parse message metadata:', metadataError);
                     }
@@ -532,9 +544,44 @@ function App() {
                 return processed;
             });
 
-            const messagesWithReplies = processedMessages.map(msg => {
+            // Group council messages into a synthetic card
+            const councilMap = {};
+            const visibleMessages = [];
+
+            for (const msg of processedMessages) {
+                const isCouncil = msg.conversationMode === 'council' && msg.councilSessionId;
+                if (isCouncil) {
+                    if (!councilMap[msg.councilSessionId]) {
+                        councilMap[msg.councilSessionId] = {
+                            id: msg.councilSessionId,
+                            sender: 'council',
+                            time: msg.time,
+                            stages: {
+                                1: { status: 'done', results: [] },
+                                2: { status: 'done', rankings: [] },
+                                3: { status: 'pending', response: null }
+                            }
+                        };
+                    }
+                    const session = councilMap[msg.councilSessionId];
+                    if (msg.stage === 1) {
+                        session.stages[1].results.push({ model: msg.model, response: msg.text });
+                    } else if (msg.stage === 2) {
+                        session.stages[2].rankings.push({ model: msg.model, ranking: msg.text });
+                    } else if (msg.stage === 3) {
+                        session.stages[3] = { status: 'done', response: msg.text };
+                        session.time = msg.time;
+                    }
+                    continue; // don't render raw council messages
+                }
+                visibleMessages.push(msg);
+            }
+
+            const councilMessages = Object.values(councilMap);
+
+            const allMessages = [...visibleMessages, ...councilMessages].map(msg => {
                 if (msg.replyToMessageId) {
-                    const replyToMessage = processedMessages.find(m => m.id === msg.replyToMessageId);
+                    const replyToMessage = visibleMessages.find(m => m.id === msg.replyToMessageId);
                     if (replyToMessage) {
                         msg.replyTo = {
                             id: replyToMessage.id,
@@ -547,7 +594,8 @@ function App() {
                 return msg;
             });
 
-            return { processedMessages, messagesWithReplies };
+            const sorted = allMessages.sort((a, b) => new Date(a.time) - new Date(b.time));
+            return { processedMessages, messagesWithReplies: sorted };
         };
 
         try {

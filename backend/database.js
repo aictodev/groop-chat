@@ -300,7 +300,7 @@ class Database {
     }
 
     // Create a new AI message (compatible with existing schema)
-    async createAIMessage(content, modelId, isFirstResponder = false, conversationId = '00000000-0000-0000-0000-000000000002', replyToMessageId = null, conversationMode = 'group', userId = '00000000-0000-0000-0000-000000000001') {
+    async createAIMessage(content, modelId, isFirstResponder = false, conversationId = '00000000-0000-0000-0000-000000000002', replyToMessageId = null, conversationMode = 'group', userId = '00000000-0000-0000-0000-000000000001', extraMetadata = {}) {
         // Validate required parameters
         if (!content || content.trim() === '') {
             throw new Error('AI message content is required');
@@ -343,20 +343,18 @@ class Database {
 
         // Store reply info in metadata field if it exists, otherwise skip
         const hasValidReplyId = replyToMessageId && replyToMessageId !== 'null' && replyToMessageId !== 'undefined';
-        if (hasValidReplyId || conversationMode !== 'group') {
-            try {
-                const metadata = {
-                    conversation_mode: conversationMode,
-                    is_direct_reply: conversationMode === 'direct'
-                };
-                // Only add reply_to_message_id if it's a valid UUID
-                if (hasValidReplyId) {
-                    metadata.reply_to_message_id = replyToMessageId;
-                }
-                insertData.metadata = JSON.stringify(metadata);
-            } catch (e) {
-                console.log('Metadata field not available, skipping reply info');
+        try {
+            const metadata = {
+                conversation_mode: conversationMode,
+                is_direct_reply: conversationMode === 'direct',
+                ...extraMetadata
+            };
+            if (hasValidReplyId) {
+                metadata.reply_to_message_id = replyToMessageId;
             }
+            insertData.metadata = JSON.stringify(metadata);
+        } catch (e) {
+            console.log('Metadata field not available, skipping reply info');
         }
 
         try {

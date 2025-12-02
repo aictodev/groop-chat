@@ -571,7 +571,7 @@ async function callOpenRouterForCouncil(model, prompt, history = [], maxLength =
 }
 
 // Stage 1: Collect individual responses
-async function stage1_collect_responses(userQuery, models, history, res) {
+async function stage1_collect_responses(userQuery, models, history, res, conversationId, userId, userMessageId, councilSessionId) {
     res.write(`data: ${JSON.stringify({ type: 'stage1_start', models })}\n\n`);
 
     const promises = models.map(async (model) => {
@@ -582,6 +582,20 @@ async function stage1_collect_responses(userQuery, models, history, res) {
                 model,
                 response
             })}\n\n`);
+            try {
+                await database.createAIMessage(
+                    response,
+                    model,
+                    false,
+                    conversationId,
+                    userMessageId,
+                    'council',
+                    userId,
+                    { stage: 1, council_session_id: councilSessionId, is_council_hidden: true }
+                );
+            } catch (err) {
+                console.warn('Failed to persist Stage 1 council message:', err?.message || err);
+            }
             return { model, response };
         }
         return null;
@@ -592,7 +606,7 @@ async function stage1_collect_responses(userQuery, models, history, res) {
 }
 
 // Stage 2: Review and Rank
-async function stage2_collect_rankings(userQuery, stage1Results, res) {
+async function stage2_collect_rankings(userQuery, stage1Results, res, conversationId, userId, councilSessionId) {
     res.write(`data: ${JSON.stringify({ type: 'stage2_start' })}\n\n`);
 
     const labels = stage1Results.map((_, i) => String.fromCharCode(65 + i)); // A, B, C...
@@ -646,6 +660,20 @@ Now provide your evaluation and ranking:`;
                 model,
                 ranking: response
             })}\n\n`);
+            try {
+                await database.createAIMessage(
+                    response,
+                    model,
+                    false,
+                    conversationId,
+                    null,
+                    'council',
+                    userId,
+                    { stage: 2, council_session_id: councilSessionId, is_council_hidden: true }
+                );
+            } catch (err) {
+                console.warn('Failed to persist Stage 2 council ranking:', err?.message || err);
+            }
             return { model, ranking: response };
         }
         return null;
@@ -659,7 +687,7 @@ Now provide your evaluation and ranking:`;
 }
 
 // Stage 3: Synthesize
-async function stage3_synthesize_final(userQuery, stage1Results, stage2Results, res, conversationId, userId, userMessageId, chairmanModel) {
+async function stage3_synthesize_final(userQuery, stage1Results, stage2Results, res, conversationId, userId, userMessageId, chairmanModel, councilSessionId) {
     res.write(`data: ${JSON.stringify({ type: 'stage3_start' })}\n\n`);
 
     const stage1Text = stage1Results.map(r =>
@@ -705,7 +733,8 @@ Provide a clear, well-reasoned final answer that represents the council's collec
                 conversationId,
                 userMessageId,
                 'council',
-                userId
+                userId,
+                { stage: 3, council_session_id: councilSessionId, is_council_hidden: false }
             );
         } catch (err) {
             console.warn('Failed to persist Stage 3 council synthesis:', err?.message || err);
@@ -723,6 +752,7 @@ async function handleCouncilRequest(req, res) {
     console.log('[Council] Request received');
     const { prompt, selectedModels, conversationId } = req.body;
     const userId = req.user?.id || FALLBACK_USER_ID;
+    const councilSessionId = randomUUID();
 
     if (!prompt) {
         return res.status(400).json({ error: 'Prompt is required' });
@@ -781,7 +811,11 @@ async function handleCouncilRequest(req, res) {
             prompt,
             selectedModels,
             history,
-            res
+            res,
+            targetConversationId,
+            userId,
+            userMessageId,
+            councilSessionId
         );
 
         if (stage1Results.length === 0) {
@@ -791,7 +825,10 @@ async function handleCouncilRequest(req, res) {
         const { rankings: stage2Results, labelToModel } = await stage2_collect_rankings(
             prompt,
             stage1Results,
-            res
+            res,
+            targetConversationId,
+            userId,
+            councilSessionId
         );
 
         await stage3_synthesize_final(
@@ -802,7 +839,8 @@ async function handleCouncilRequest(req, res) {
             targetConversationId,
             userId,
             userMessageId,
-            chairmanModel
+            chairmanModel,
+            councilSessionId
         );
 
         res.write(`data: ${JSON.stringify({ type: 'complete' })}\n\n`);
