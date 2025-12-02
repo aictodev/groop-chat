@@ -280,12 +280,29 @@ function App() {
         }
     }, [activeConversationId, conversations, user, loading]);
 
-    // Auto-scroll to the latest message
+    // Auto-scroll to the latest message when user is at/near bottom
+    const [autoScroll, setAutoScroll] = useState(true);
+
     useEffect(() => {
-        if (chatContainerRef.current) {
+        const el = chatContainerRef.current;
+        if (!el) return;
+
+        const handleScroll = () => {
+            const threshold = 120; // px from bottom to keep auto-scroll
+            const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+            setAutoScroll(distanceFromBottom < threshold);
+        };
+
+        el.addEventListener('scroll', handleScroll);
+        handleScroll();
+        return () => el.removeEventListener('scroll', handleScroll);
+    }, []);
+
+    useEffect(() => {
+        if (autoScroll && chatContainerRef.current) {
             chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
         }
-    }, [messages]);
+    }, [messages, autoScroll]);
 
     useEffect(() => {
         if (conversationMode === 'direct') {
