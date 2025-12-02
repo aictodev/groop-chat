@@ -1439,7 +1439,11 @@ function App() {
                                 </div>
                             </header>
 
-                            <div className="chat-history" ref={chatContainerRef}>
+                            <div
+                                className="chat-history"
+                                ref={chatContainerRef}
+                                style={{ paddingBottom: '140px' }}
+                            >
                                 <div className="chat-history__stack">
                                     {messages.length === 0 && !isLoading ? (
                                         <div className="chat-message chat-message--system mt-8">
@@ -1520,8 +1524,8 @@ function App() {
                                                 </div>
                                             )}
                                         </div>
-                                        <div className="chat-composer__actions">
-                                            <label className="chat-composer__limit">
+                                        <div className="chat-composer__actions flex flex-wrap items-center justify-end gap-2">
+                                            <label className="chat-composer__limit hidden sm:flex">
                                                 <Gauge className="chat-composer__limit-icon" aria-hidden="true" />
                                                 <span className="chat-composer__limit-text">Limit</span>
                                                 <input
@@ -1537,7 +1541,7 @@ function App() {
                                                 type="button"
                                                 onClick={() => setIsCouncilMode(!isCouncilMode)}
                                                 className={cn(
-                                                    "p-1.5 rounded-full transition-colors flex items-center gap-1.5 border",
+                                                    "p-1.5 rounded-full transition-colors flex items-center gap-1.5 border flex-shrink-0",
                                                     isCouncilMode ? "bg-indigo-50 border-indigo-200" : "border-transparent hover:bg-gray-100"
                                                 )}
                                                 title={isCouncilMode ? "Council Mode Active" : "Enable Council Mode"}
