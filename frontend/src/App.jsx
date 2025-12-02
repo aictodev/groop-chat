@@ -1442,7 +1442,7 @@ function App() {
                             <div
                                 className="chat-history"
                                 ref={chatContainerRef}
-                                style={{ paddingBottom: '140px' }}
+                                style={{ paddingBottom: '100px' }}
                             >
                                 <div className="chat-history__stack">
                                     {messages.length === 0 && !isLoading ? (
@@ -1469,7 +1469,7 @@ function App() {
                             </div>
 
                             <div className="chat-composer">
-                                <div className="flex-1 space-y-2">
+                                <div className="flex-1 space-y-1">
                                     {replyToMessage && (
                                         <ReplyPreview
                                             message={replyToMessage}
@@ -1488,8 +1488,8 @@ function App() {
                                             </span>
                                         )}
                                     </div>
-                                    <div className="chat-composer__context">
-                                        <div className="chat-composer__field">
+                                    <div className="chat-composer__context flex items-end gap-2">
+                                        <div className="chat-composer__field flex-1">
                                             <textarea
                                                 rows={1}
                                                 value={input}
@@ -1524,7 +1524,7 @@ function App() {
                                                 </div>
                                             )}
                                         </div>
-                                        <div className="chat-composer__actions flex flex-wrap items-center justify-end gap-2">
+                                        <div className="flex items-center gap-2 flex-shrink-0">
                                             <label className="chat-composer__limit hidden sm:flex">
                                                 <Gauge className="chat-composer__limit-icon" aria-hidden="true" />
                                                 <span className="chat-composer__limit-text">Limit</span>
