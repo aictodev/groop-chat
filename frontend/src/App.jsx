@@ -902,17 +902,14 @@ function App() {
 
             // --- Council Mode Events ---
             case 'stage1_start': {
-                const councilMsg = {
-                    id: `council_${Date.now()}`,
-                    sender: 'council',
-                    time: new Date(),
-                    stages: {
-                        1: { status: 'loading', results: [] },
-                        2: { status: 'pending', rankings: [] },
-                        3: { status: 'pending', response: null }
-                    }
-                };
-                appendMessage(councilMsg, { persist: false }); // Don't persist complex objects yet
+                setMessages(prev => {
+                    const last = prev[prev.length - 1];
+                    if (last?.sender !== 'council') return prev;
+
+                    const updated = { ...last, stages: { ...last.stages } };
+                    updated.stages[1] = { ...updated.stages[1], status: 'loading' };
+                    return [...prev.slice(0, -1), updated];
+                });
                 break;
             }
             case 'stage1_result': {
@@ -1118,6 +1115,21 @@ function App() {
             replyTo: replyToMessage
         };
         appendMessage(userMessage);
+
+        // Pre-seed a council card so it stays visible even if streams lag
+        if (isCouncilMode) {
+            const councilMsg = {
+                id: `council_${Date.now()}`,
+                sender: 'council',
+                time: new Date(),
+                stages: {
+                    1: { status: 'loading', results: [] },
+                    2: { status: 'pending', rankings: [] },
+                    3: { status: 'pending', response: null }
+                }
+            };
+            appendMessage(councilMsg, { persist: false });
+        }
 
         // Clear reply after sending
         if (replyToMessage) {
