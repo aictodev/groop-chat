@@ -168,4 +168,4 @@ const CouncilMessage = ({ msg }) => {
     );
 };
 
-export default CouncilMessage;
+export default React.memo(CouncilMessage);
