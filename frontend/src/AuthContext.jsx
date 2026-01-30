@@ -1,6 +1,9 @@
 /* eslint-disable react-refresh/only-export-components */
 import React, { createContext, useContext, useEffect, useState } from 'react'
-import { supabase } from './supabaseClient'
+import { useAuthActions, useAuthToken } from '@convex-dev/auth/react'
+import { useConvexAuth } from 'convex/react'
+
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:7001'
 
 const AuthContext = createContext({})
 
@@ -16,42 +19,62 @@ export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null)
     const [session, setSession] = useState(null)
     const [loading, setLoading] = useState(true)
+    const { isAuthenticated, isLoading } = useConvexAuth()
+    const { signIn, signOut: authSignOut } = useAuthActions()
+    const token = useAuthToken()
 
     useEffect(() => {
-        // Get initial session
-        supabase.auth.getSession().then(({ data: { session } }) => {
-            setSession(session)
-            setUser(session?.user ?? null)
-            setLoading(false)
-        })
+        if (!token) {
+            setSession(null)
+            setUser(null)
+            setLoading(isLoading)
+            return
+        }
 
-        // Listen for auth changes
-        const {
-            data: { subscription },
-        } = supabase.auth.onAuthStateChange(async (event, session) => {
-            setSession(session)
-            setUser(session?.user ?? null)
-            setLoading(false)
+        let ignore = false
+        const controller = new AbortController()
 
-            if (event === 'SIGNED_IN') {
-                console.log('User signed in:', session?.user?.email)
-            } else if (event === 'SIGNED_OUT') {
-                console.log('User signed out')
+        const loadProfile = async () => {
+            setSession({ access_token: token })
+            setLoading(true)
+
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/profile`, {
+                    headers: { Authorization: `Bearer ${token}` },
+                    signal: controller.signal
+                })
+
+                if (!response.ok) {
+                    throw new Error(`Profile load failed (${response.status})`)
+                }
+
+                const data = await response.json()
+                if (!ignore) {
+                    setUser(data)
+                }
+            } catch (error) {
+                if (!ignore && error.name !== 'AbortError') {
+                    console.error('Error loading profile:', error.message)
+                    setUser(null)
+                }
+            } finally {
+                if (!ignore) {
+                    setLoading(false)
+                }
             }
-        })
+        }
 
-        return () => subscription.unsubscribe()
-    }, [])
+        loadProfile()
+
+        return () => {
+            ignore = true
+            controller.abort()
+        }
+    }, [token, isLoading])
 
     const signInWithGoogle = async () => {
         try {
-            const { error } = await supabase.auth.signInWithOAuth({
-                provider: 'google',
-                options: {
-                    redirectTo: `${window.location.origin}/`
-                }
-            })
-            if (error) throw error
+            await signIn('google', { redirectTo: window.location.origin })
         } catch (error) {
             console.error('Error signing in with Google:', error.message)
             throw error
@@ -60,11 +83,7 @@ export const AuthProvider = ({ children }) => {
 
     const signInWithEmail = async (email, password) => {
         try {
-            const { error } = await supabase.auth.signInWithPassword({
-                email,
-                password
-            })
-            if (error) throw error
+            await signIn('password', { flow: 'signIn', email, password })
         } catch (error) {
             console.error('Error signing in with email:', error.message)
             throw error
@@ -73,17 +92,7 @@ export const AuthProvider = ({ children }) => {
 
     const signUp = async (email, password) => {
         try {
-            const { error } = await supabase.auth.signUp({
-                email,
-                password
-            })
-            if (error) throw error
-
-            const { error: signInError } = await supabase.auth.signInWithPassword({
-                email,
-                password
-            })
-            if (signInError) throw signInError
+            await signIn('password', { flow: 'signUp', email, password })
         } catch (error) {
             console.error('Error signing up:', error.message)
             throw error
@@ -92,8 +101,9 @@ export const AuthProvider = ({ children }) => {
 
     const signOut = async () => {
         try {
-            const { error } = await supabase.auth.signOut()
-            if (error) throw error
+            await authSignOut()
+            setUser(null)
+            setSession(null)
         } catch (error) {
             console.error('Error signing out:', error.message)
             throw error
@@ -103,7 +113,7 @@ export const AuthProvider = ({ children }) => {
     const value = {
         user,
         session,
-        loading,
+        loading: loading || isLoading || (isAuthenticated && !user),
         signInWithGoogle,
         signInWithEmail,
         signUp,

@@ -1,5 +1,8 @@
 # Supabase Setup Guide
 
+> Option A now uses Convex for the database. Supabase remains required for auth (JWT verification)
+> and storage endpoints until Option B. Keep these credentials configured.
+
 This guide will help you set up Supabase for your AI Group Chat application.
 
 ## Step 1: Create Supabase Account

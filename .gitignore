@@ -78,3 +78,5 @@ frontend/public/robot.jpg
 frontend/public/robot.jpg.backup
 .vercel
 AGENTS.md
+convex/_generated/
+.convex/

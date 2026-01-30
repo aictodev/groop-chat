@@ -6,12 +6,14 @@
   "main": "api/index.js",
   "scripts": {
     "dev": "node api/index.js",
-    "start": "node api/index.js"
+    "start": "node api/index.js",
+    "postinstall": "npx convex codegen --commonjs"
   },
   "engines": {
     "node": ">=18"
   },
   "dependencies": {
+    "convex": "^1.15.0",
     "@supabase/supabase-js": "^2.57.4",
     "axios": "^1.11.0",
     "cors": "^2.8.5",

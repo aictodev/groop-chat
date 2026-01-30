@@ -37,13 +37,16 @@
     "node": ">=18.0.0"
   },
   "dependencies": {
+    "@auth/core": "^0.37.0",
+    "@convex-dev/auth": "^0.0.90",
     "@supabase/supabase-js": "^2.57.4",
+    "axios": "^1.11.0",
+    "convex": "^1.15.0",
+    "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.21.1",
-    "cors": "^2.8.5",
-    "axios": "^1.11.0",
     "multer": "^2.0.2",
-    "uuid": "^13.0.0",
-    "sharp": "^0.34.4"
+    "sharp": "^0.34.4",
+    "uuid": "^13.0.0"
   }
 }

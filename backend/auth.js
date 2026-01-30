@@ -1,24 +1,36 @@
-const { createClient } = require('@supabase/supabase-js');
+const path = require('path');
+const { ConvexHttpClient } = require('convex/browser');
 const database = require('./database');
 
-// Initialize Supabase client for server-side auth verification
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_ANON_KEY;
+const convexUrl = process.env.CONVEX_URL;
+let api = null;
 
-let supabase = null;
-
-if (!supabaseUrl || !supabaseKey) {
-    console.warn('Missing Supabase credentials for auth middleware. Authentication will fail.');
-    // process.exit(1); // Do not exit, allow server to start
-} else {
-    try {
-        supabase = createClient(supabaseUrl, supabaseKey);
-    } catch (e) {
-        console.error('Failed to initialize Supabase auth client:', e);
-    }
+try {
+    const apiPath = path.join(__dirname, '..', 'convex', '_generated', 'api_cjs.cjs');
+    api = require(apiPath).api;
+} catch (error) {
+    console.error('Failed to load Convex API bindings for auth:', error);
 }
 
-// Middleware to verify JWT token from Supabase
+const createAuthedClient = (token) => {
+    if (!convexUrl) {
+        return null;
+    }
+    const client = new ConvexHttpClient(convexUrl);
+    client.setAuth(token);
+    return client;
+};
+
+const buildUser = (profile) => ({
+    id: profile.id,
+    email: profile.email || null,
+    user_metadata: {
+        full_name: profile.display_name || null,
+        avatar_url: profile.avatar_url || null
+    },
+    auth_user_id: profile.auth_user_id || null
+});
+
 const authenticateUser = async (req, res, next) => {
     try {
         const authHeader = req.headers.authorization;
@@ -29,69 +41,63 @@ const authenticateUser = async (req, res, next) => {
 
         const token = authHeader.split(' ')[1];
 
-        if (!supabase) {
-            console.error('Supabase client not initialized');
+        if (!api || !convexUrl) {
+            console.error('Convex auth not configured');
             return res.status(500).json({ error: 'Authentication service unavailable' });
         }
 
-        // Verify the JWT token with Supabase
-        const { data: { user }, error } = await supabase.auth.getUser(token);
+        const client = createAuthedClient(token);
+        if (!client) {
+            return res.status(500).json({ error: 'Authentication service unavailable' });
+        }
 
-        if (error || !user) {
+        const profile = await client.mutation(api.db.ensureUserProfile, {});
+        if (!profile) {
             return res.status(401).json({ error: 'Invalid or expired token' });
         }
 
-        // Ensure user exists in our custom users table
         try {
-            await database.ensureUserExists(user, token);
+            await database.ensureDefaultConversation(profile.id);
         } catch (dbError) {
-            console.error('Failed to ensure user exists:', dbError);
-            // Continue anyway - this shouldn't block authentication
+            console.warn('Failed to ensure default conversation:', dbError?.message || dbError);
         }
 
-        // Add user to request object for use in route handlers
-        req.user = user;
+        req.user = buildUser(profile);
         req.authToken = token;
         next();
     } catch (error) {
         console.error('Auth middleware error:', error);
-        return res.status(500).json({ error: 'Authentication failed' });
+        return res.status(401).json({ error: 'Invalid or expired token' });
     }
 };
 
-// Optional auth middleware - allows unauthenticated requests but adds user if token is present
 const optionalAuth = async (req, res, next) => {
     try {
         const authHeader = req.headers.authorization;
 
         if (authHeader && authHeader.startsWith('Bearer ')) {
             const token = authHeader.split(' ')[1];
-            if (supabase) {
-                const { data: { user }, error } = await supabase.auth.getUser(token);
-
-                if (!error && user) {
-                    // Ensure user exists in our custom users table
-                    try {
-                        await database.ensureUserExists(user, token);
-                    } catch (dbError) {
-                        console.error('Failed to ensure user exists (optional auth):', dbError);
-                        // Continue anyway - this shouldn't block optional authentication
+            if (api && convexUrl) {
+                try {
+                    const client = createAuthedClient(token);
+                    const profile = await client.mutation(api.db.ensureUserProfile, {});
+                    if (profile) {
+                        req.user = buildUser(profile);
+                        req.authToken = token;
                     }
-                    req.user = user;
-                    req.authToken = token;
+                } catch (error) {
+                    console.warn('Optional auth failed:', error?.message || error);
                 }
             }
         }
 
         next();
     } catch (error) {
-        // Don't fail on auth errors for optional auth
         next();
     }
 };
 
 module.exports = {
     authenticateUser,
-    optionalAuth,
-    supabase
+    optionalAuth
 };
