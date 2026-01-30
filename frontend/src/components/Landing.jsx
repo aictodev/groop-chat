@@ -184,22 +184,6 @@ const Landing = ({ onGoogleSignIn, onEmailSignIn, onEmailSignUp }) => {
           </div>
 
           <div className="landing-footer">
-            <button
-              type="button"
-              className={mode === 'login' ? 'landing-footer__action landing-footer__action--active' : 'landing-footer__action'}
-              onClick={() => setMode('login')}
-            >
-              Sign in
-            </button>
-            <span aria-hidden>·</span>
-            <button
-              type="button"
-              className={mode === 'signup' ? 'landing-footer__action landing-footer__action--active' : 'landing-footer__action'}
-              onClick={() => setMode('signup')}
-            >
-              Sign up
-            </button>
-            <span aria-hidden>·</span>
             <a
               className="landing-footer__link"
               href="https://pranavhari.com"
