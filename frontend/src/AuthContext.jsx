@@ -74,7 +74,7 @@ export const AuthProvider = ({ children }) => {
 
     const signInWithGoogle = async () => {
         try {
-            await signIn('google', { redirectTo: window.location.origin })
+            await signIn('google', { redirectTo: '/' })
         } catch (error) {
             console.error('Error signing in with Google:', error.message)
             throw error
