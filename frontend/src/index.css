@@ -255,6 +255,22 @@
     @apply transition hover:text-neutral-300;
   }
 
+  .landing-footer {
+    @apply flex items-center gap-2 text-xs text-neutral-500;
+  }
+
+  .landing-footer__action {
+    @apply text-neutral-400 transition hover:text-neutral-200;
+  }
+
+  .landing-footer__action--active {
+    @apply text-white;
+  }
+
+  .landing-footer__link {
+    @apply text-neutral-300 transition hover:text-white underline-offset-4 hover:underline;
+  }
+
   @screen lg {
     .landing-shell {
       @apply flex-row;

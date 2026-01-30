@@ -128,7 +128,7 @@ const Landing = ({ onGoogleSignIn, onEmailSignIn, onEmailSignUp }) => {
                   onChange={(event) => setPassword(event.target.value)}
                   placeholder="••••••••"
                   required
-                  minLength={6}
+                  minLength={8}
                 />
               </label>
             </div>
@@ -181,6 +181,33 @@ const Landing = ({ onGoogleSignIn, onEmailSignIn, onEmailSignUp }) => {
             <a href="#" className="landing-link">Terms of use</a>
             <span aria-hidden>·</span>
             <a href="#" className="landing-link">Privacy policy</a>
+          </div>
+
+          <div className="landing-footer">
+            <button
+              type="button"
+              className={mode === 'login' ? 'landing-footer__action landing-footer__action--active' : 'landing-footer__action'}
+              onClick={() => setMode('login')}
+            >
+              Sign in
+            </button>
+            <span aria-hidden>·</span>
+            <button
+              type="button"
+              className={mode === 'signup' ? 'landing-footer__action landing-footer__action--active' : 'landing-footer__action'}
+              onClick={() => setMode('signup')}
+            >
+              Sign up
+            </button>
+            <span aria-hidden>·</span>
+            <a
+              className="landing-footer__link"
+              href="https://pranavhari.com"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Made by pH
+            </a>
           </div>
         </div>
       </section>
