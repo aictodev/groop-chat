@@ -1590,11 +1590,12 @@ const ProviderIcon = ({ modelId, size = 24 }) => {
         if (modelId.startsWith('deepseek/')) return 'deepseek';
         if (modelId.startsWith('qwen/')) return 'qwen';
         if (modelId.startsWith('moonshotai/')) return 'moonshot';
+        if (modelId.startsWith('x-ai/')) return 'x-ai';
         return 'default';
     };
 
     const provider = getProviderFromModel(modelId);
-    const iconPath = `/icons/${provider}.svg`;
+    const iconPath = `https://models.dev/logos/${provider}.svg`;
 
     if (iconError || provider === 'default') {
         // Fallback to text avatar
@@ -1606,6 +1607,8 @@ const ProviderIcon = ({ modelId, size = 24 }) => {
             'meta': '#1877F2',
             'deepseek': '#6366F1',
             'qwen': '#EF4444',
+            'moonshot': '#F97316',
+            'x-ai': '#111827',
             'default': '#6B7280'
         };
 

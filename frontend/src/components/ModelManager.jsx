@@ -34,7 +34,7 @@ const MODEL_PROVIDER_MAP = {
   'deepseek/deepseek-chat': 'deepseek',
   'qwen/qwen-2.5-7b-instruct': 'qwen',
   'moonshotai/kimi-k2': 'moonshot',
-  'x-ai/grok-4.1-fast:free': 'xai',
+  'x-ai/grok-4.1-fast:free': 'x-ai',
 };
 
 const MODELS = [
@@ -175,7 +175,7 @@ const ModelManager = ({ selectedModels, setSelectedModels, disabled }) => {
     return {
       name: model?.name || modelId,
       provider,
-      icon: provider ? `/icons/${provider}.svg` : null,
+      icon: provider ? `https://models.dev/logos/${provider}.svg` : null,
     };
   };
 
