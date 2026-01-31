@@ -8,6 +8,7 @@ This is a group chat application that allows users to interact with multiple AI 
 
 - **Frontend**: React + Vite app with Tailwind CSS styling and custom WhatsApp-like UI
 - **Backend**: Node.js Express server that orchestrates conversations between multiple AI models via OpenRouter API
+- **Database/Auth**: Convex (data + auth). Supabase is now only used for Storage (avatars).
 
 ## Development Commands
 
@@ -32,11 +33,12 @@ This is a group chat application that allows users to interact with multiple AI 
 - `ModelSelector` - Dropdown for choosing the first responder model
 - `TypingIndicator` - Shows loading state during API calls
 
-**Backend (`backend/index.js`)**:
-- Express server with single `/api/chat` endpoint
+**Backend (`backend/api/index.js`)**:
+- Express server with `/api/*` endpoints
 - Integrates with OpenRouter API to access multiple LLM models
 - Uses prompt templates from `prompts/` directory for system instructions
 - Implements "first responder" pattern where one model answers first, then others provide unique perspectives
+- Persists conversations/messages in Convex via `backend/database.js`
 
 ### Key Features
 
@@ -50,6 +52,9 @@ This is a group chat application that allows users to interact with multiple AI 
 ### Configuration
 
 - **Environment**: Backend requires `OPENROUTER_API_KEY` in `.env` file
+- **Convex (backend)**: `CONVEX_URL` plus `CONVEX_ADMIN_KEY` or `CONVEX_DEPLOY_KEY`
+- **Convex (frontend)**: `VITE_CONVEX_URL`
+- **Convex Auth envs**: `SITE_URL`, `JWT_PRIVATE_KEY`, `JWKS`, `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`
 - **Models**: Configured in `ALL_MODELS` array in backend and `MODELS` array in frontend
 - **API Endpoint**: Frontend connects to backend on port 7001 by default
 - **Character Limits**: Responses limited to 280 characters for concise chat experience
@@ -143,3 +148,11 @@ Successfully implemented WhatsApp-style reply functionality with direct conversa
 - Added `DELETE /api/conversations/:conversationId` supporting `scope=me` (soft delete by clearing the participant) and `scope=all` (owner-only hard delete that cascades the row). Database helpers `softDeleteConversation` and `deleteConversation` guard access and fall back to sample data when Supabase is offline.
 - Frontend sidebar includes a three-dot menu per conversation with *Delete for me* and *Delete permanently* options, reuses the new endpoint, and fixes overflow by tightening flex layout.
 - Existing conversations/messages were reassigned to the real Supabase UID (`claude@codex.com`), and the backend now consistently passes the authenticated user ID when fetching metadata to avoid leaking other users’ chats.
+
+## Recent Updates (2026-01-31)
+
+- Migrated data layer and auth to Convex (`convex/schema.js`, `convex/db.js`, `convex/auth.js`, `convex/http.js`, `convex/auth.config.js`).
+- Backend now authenticates against Convex tokens and uses Convex HTTP client (`backend/auth.js`, `backend/database.js`).
+- Added one-off migration script `backend/migrate_supabase_to_convex.js`.
+- Vercel frontend uses `VITE_CONVEX_URL`; backend uses `CONVEX_URL` with admin/deploy key.
+- For Convex Auth, Google OAuth redirect must be `https://<deployment>.convex.site/api/auth/callback/google`, and Convex envs `SITE_URL`, `JWT_PRIVATE_KEY`, `JWKS`, `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET` must be set.
