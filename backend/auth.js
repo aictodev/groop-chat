@@ -7,7 +7,13 @@ let api = null;
 
 try {
     const apiPath = path.join(__dirname, '..', 'convex', '_generated', 'api_cjs.cjs');
-    api = require(apiPath).api;
+    try {
+        api = require(apiPath).api;
+    } catch (error) {
+        const { anyApi } = require('convex/server');
+        api = anyApi;
+        console.warn('Convex API bindings not found for auth, falling back to anyApi:', error?.message || error);
+    }
 } catch (error) {
     console.error('Failed to load Convex API bindings for auth:', error);
 }

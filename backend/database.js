@@ -14,7 +14,13 @@ try {
     if (convexUrl) {
         const { ConvexHttpClient } = require('convex/browser');
         const apiPath = path.join(__dirname, '..', 'convex', '_generated', 'api_cjs.cjs');
-        api = require(apiPath).api;
+        try {
+            api = require(apiPath).api;
+        } catch (error) {
+            const { anyApi } = require('convex/server');
+            api = anyApi;
+            console.warn('Convex API bindings not found, falling back to anyApi:', error?.message || error);
+        }
         convex = new ConvexHttpClient(convexUrl);
         if (convexAdminKey) {
             convex.setAdminAuth(convexAdminKey);
