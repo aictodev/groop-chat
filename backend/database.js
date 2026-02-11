@@ -58,10 +58,10 @@ const SAMPLE_MODEL_MAP = {
     'openai/gpt-4o-mini': { name: 'GPT-4o mini', avatar: ' O ', display_name: 'GPT-4o Mini', provider: 'openai' },
     'anthropic/claude-3.5-sonnet': { name: 'Claude', avatar: ' A ', display_name: 'Claude 3.5 Sonnet', provider: 'anthropic' },
     'meta-llama/llama-3-8b-instruct': { name: 'Llama', avatar: ' L ', display_name: 'Llama 3 8B Instruct', provider: 'meta' },
-    'deepseek/deepseek-chat': { name: 'DeepSeek Chat', avatar: ' D ', display_name: 'DeepSeek Chat', provider: 'deepseek' },
-    'qwen/qwen-2.5-7b-instruct': { name: 'Qwen', avatar: ' Q ', display_name: 'Qwen 2.5 7B Instruct', provider: 'qwen' },
-    'moonshotai/kimi-k2': { name: 'Kimi K2', avatar: ' K ', display_name: 'Moonshot Kimi K2', provider: 'moonshotai' },
-    'x-ai/grok-4.1-fast:free': { name: 'Grok', avatar: ' X ', display_name: 'Grok 4.1 Fast', provider: 'x-ai' }
+    'deepseek/deepseek-v3.2-speciale': { name: 'DeepSeek V3.2', avatar: ' D ', display_name: 'DeepSeek V3.2', provider: 'deepseek' },
+    'qwen/qwen3-max-thinking': { name: 'Qwen3 Max', avatar: ' Q ', display_name: 'Qwen3 Max Thinking', provider: 'qwen' },
+    'moonshotai/kimi-k2.5': { name: 'Kimi K2.5', avatar: ' K ', display_name: 'Moonshot Kimi K2.5', provider: 'moonshotai' },
+    'x-ai/grok-4.1-fast': { name: 'Grok 4.1 Fast', avatar: ' X ', display_name: 'Grok 4.1 Fast', provider: 'x-ai' }
 };
 
 const DEFAULT_MODEL_IDS = Object.keys(SAMPLE_MODEL_MAP);

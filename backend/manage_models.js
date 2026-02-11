@@ -33,16 +33,19 @@ const AVAILABLE_MODELS = {
     'meta-llama/llama-3-70b-instruct': { name: 'Llama', display_name: 'Llama 3 70B Instruct', avatar: ' L ', provider: 'meta' },
 
     // DeepSeek Models
-    'deepseek/deepseek-chat': { name: 'DeepSeek Chat', display_name: 'DeepSeek Chat', avatar: ' D ', provider: 'deepseek' },
+    'deepseek/deepseek-v3.2-speciale': { name: 'DeepSeek V3.2', display_name: 'DeepSeek V3.2', avatar: ' D ', provider: 'deepseek' },
     'deepseek/deepseek-coder': { name: 'DeepSeek Coder', display_name: 'DeepSeek Coder', avatar: ' D ', provider: 'deepseek' },
 
     // Qwen Models
-    'qwen/qwen-2.5-7b-instruct': { name: 'Qwen', display_name: 'Qwen 2.5 7B Instruct', avatar: ' Q ', provider: 'qwen' },
+    'qwen/qwen3-max-thinking': { name: 'Qwen3 Max', display_name: 'Qwen3 Max Thinking', avatar: ' Q ', provider: 'qwen' },
     'qwen/qwen3-8b:free': { name: 'Qwen', display_name: 'Qwen 3 8B Free', avatar: ' Q ', provider: 'qwen' },
     'qwen/qwen-2-7b-instruct': { name: 'Qwen', display_name: 'Qwen 2 7B Instruct', avatar: ' Q ', provider: 'qwen' },
 
+    // Moonshot Models
+    'moonshotai/kimi-k2.5': { name: 'Kimi K2.5', display_name: 'Moonshot Kimi K2.5', avatar: ' K ', provider: 'moonshotai' },
+
     // xAI Models
-    'x-ai/grok-4.1-fast:free': { name: 'Grok', display_name: 'Grok 4.1 Fast', avatar: ' X ', provider: 'x-ai' },
+    'x-ai/grok-4.1-fast': { name: 'Grok 4.1 Fast', display_name: 'Grok 4.1 Fast', avatar: ' X ', provider: 'x-ai' },
 };
 
 async function listCurrentModels() {
@@ -295,7 +298,7 @@ async function main() {
             console.log('');
             console.log('Examples:');
             console.log('  node manage_models.js list');
-            console.log('  node manage_models.js replace qwen/qwen-2.5-7b-instruct qwen/qwen3-8b:free');
+            console.log('  node manage_models.js replace qwen/qwen3-max-thinking qwen/qwen3-8b:free');
             console.log('  node manage_models.js add openai/gpt-4o');
             break;
     }

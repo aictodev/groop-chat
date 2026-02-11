@@ -140,7 +140,7 @@ Successfully implemented WhatsApp-style reply functionality with direct conversa
 - Hardened the auth context (`frontend/src/AuthContext.jsx`) to auto-login after sign-up and better report Supabase failures; landing form wiring fixed to submit reliably.
 - Refactored backend data access (`backend/database.js`, `backend/index.js`) to scope conversations and messages by `conversation_participants`, preventing cross-user leakage and returning 403 on unauthorized access.
 - New users automatically receive a seeded conversation and default AI model ladder; all conversation mutations now verify participation before writing.
-- Synced `ai_models` seed data in `backend/supabase_schema.sql` with the exact IDs used in the app (Gemini 2.5 Flash, GPT-4o mini, Claude 3.5 Sonnet, Llama 3 8B Instruct, DeepSeek Chat, Qwen 2.5 7B Instruct, Moonshot Kimi K2).
+- Synced `ai_models` seed data in `backend/supabase_schema.sql` with the exact IDs used in the app (Gemini 2.5 Flash, GPT-4o mini, Claude 3.5 Sonnet, Llama 3 8B Instruct, DeepSeek V3.2, Qwen3 Max Thinking, Moonshot Kimi K2.5, Grok 4.1 Fast).
 
 ## Recent Updates (2025-10-12)
 

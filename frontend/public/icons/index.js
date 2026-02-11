@@ -1,18 +1,27 @@
-// Auto-generated icon exports
-export { default as googleIcon } from './google.svg';
-export { default as openaiIcon } from './openai.svg';
-export { default as anthropicIcon } from './anthropic.svg';
-export { default as metaIcon } from './meta.svg';
-export { default as deepseekIcon } from './deepseek.svg';
-export { default as qwenIcon } from './qwen.svg';
-export { default as xaiIcon } from './xai.svg';
+import googleIcon from "./google.svg";
+import openaiIcon from "./openai.svg";
+import anthropicIcon from "./anthropic.svg";
+import metaIcon from "./meta.svg";
+import deepseekIcon from "./deepseek.svg";
+import qwenIcon from "./qwen.svg";
+import xaiIcon from "./xai.svg";
+
+export {
+  googleIcon,
+  openaiIcon,
+  anthropicIcon,
+  metaIcon,
+  deepseekIcon,
+  qwenIcon,
+  xaiIcon,
+};
 
 export const providerIcons = {
-  google: require('./google.svg'),
-  openai: require('./openai.svg'),
-  anthropic: require('./anthropic.svg'),
-  meta: require('./meta.svg'),
-  deepseek: require('./deepseek.svg'),
-  qwen: require('./qwen.svg'),
-  xai: require('./xai.svg')
+  google: googleIcon,
+  openai: openaiIcon,
+  anthropic: anthropicIcon,
+  meta: metaIcon,
+  deepseek: deepseekIcon,
+  qwen: qwenIcon,
+  xai: xaiIcon,
 };

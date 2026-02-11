@@ -21,6 +21,8 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { ConversationAvatar } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
+import { MODELS, getProviderIdFromModel } from "./config/models";
+import { PROVIDER_LOGOS } from "./config/providerLogos";
 import {
     saveCachedConversations,
     getCachedConversations,
@@ -30,16 +32,6 @@ import {
 } from './utils/cache';
 
 // --- Configuration ---
-const MODELS = [
-    { id: "google/gemini-2.5-flash", name: "Gemini" },
-    { id: "openai/gpt-4o-mini", name: "GPT-4o mini" },
-    { id: "anthropic/claude-3.5-sonnet", name: "Claude" },
-    { id: "meta-llama/llama-3-8b-instruct", name: "Llama" },
-    { id: "deepseek/deepseek-chat", name: "DeepSeek Chat" },
-    { id: "qwen/qwen-2.5-7b-instruct", name: "Qwen" },
-    { id: "moonshotai/kimi-k2", name: "Kimi K2" },
-    { id: "x-ai/grok-4.1-fast:free", name: "Grok" },
-];
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:7001';
 const BASE_COMPOSER_HEIGHT = 48;
 
@@ -1581,24 +1573,10 @@ function App() {
 // Provider icon component with fallback
 const ProviderIcon = ({ modelId, size = 24 }) => {
     const [iconError, setIconError] = useState(false);
+    const provider = getProviderIdFromModel(modelId);
+    const iconPath = PROVIDER_LOGOS[provider] || null;
 
-    // Map model IDs to provider names
-    const getProviderFromModel = (modelId) => {
-        if (modelId.startsWith('google/')) return 'google';
-        if (modelId.startsWith('openai/')) return 'openai';
-        if (modelId.startsWith('anthropic/')) return 'anthropic';
-        if (modelId.startsWith('meta-llama/')) return 'meta';
-        if (modelId.startsWith('deepseek/')) return 'deepseek';
-        if (modelId.startsWith('qwen/')) return 'qwen';
-        if (modelId.startsWith('moonshotai/')) return 'moonshot';
-        if (modelId.startsWith('x-ai/')) return 'x-ai';
-        return 'default';
-    };
-
-    const provider = getProviderFromModel(modelId);
-    const iconPath = `https://models.dev/logos/${provider}.svg`;
-
-    if (iconError || provider === 'default') {
+    if (iconError || !iconPath) {
         // Fallback to text avatar
         const initial = provider.charAt(0).toUpperCase();
         const colors = {
@@ -1608,7 +1586,7 @@ const ProviderIcon = ({ modelId, size = 24 }) => {
             'meta': '#1877F2',
             'deepseek': '#6366F1',
             'qwen': '#EF4444',
-            'moonshot': '#F97316',
+            'moonshotai': '#F97316',
             'x-ai': '#111827',
             'default': '#6B7280'
         };
@@ -1620,7 +1598,7 @@ const ProviderIcon = ({ modelId, size = 24 }) => {
                     width: size,
                     height: size,
                     borderRadius: '50%',
-                    backgroundColor: colors[provider],
+                    backgroundColor: colors[provider] || colors.default,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -2007,15 +1985,15 @@ const MarkdownRenderer = ({ content }) => {
             remarkPlugins={[remarkGfm]}
             className="markdown-body"
             components={{
-                h1: ({ node, ...props }) => <h1 className="text-lg font-bold mb-2 mt-4 first:mt-0" {...props} />,
-                h2: ({ node, ...props }) => <h2 className="text-base font-bold mb-2 mt-3" {...props} />,
-                h3: ({ node, ...props }) => <h3 className="text-sm font-bold mb-1 mt-2" {...props} />,
-                p: ({ node, ...props }) => <p className="mb-2 last:mb-0 leading-relaxed" {...props} />,
-                ul: ({ node, ...props }) => <ul className="list-disc pl-4 mb-2 space-y-1" {...props} />,
-                ol: ({ node, ...props }) => <ol className="list-decimal pl-4 mb-2 space-y-1" {...props} />,
-                li: ({ node, ...props }) => <li className="pl-1" {...props} />,
-                blockquote: ({ node, ...props }) => <blockquote className="border-l-4 border-whatsapp-divider pl-3 italic my-2 text-whatsapp-ink-soft" {...props} />,
-                code: ({ node, inline, className, children, ...props }) => {
+                h1: ({ ...props }) => <h1 className="text-lg font-bold mb-2 mt-4 first:mt-0" {...props} />,
+                h2: ({ ...props }) => <h2 className="text-base font-bold mb-2 mt-3" {...props} />,
+                h3: ({ ...props }) => <h3 className="text-sm font-bold mb-1 mt-2" {...props} />,
+                p: ({ ...props }) => <p className="mb-2 last:mb-0 leading-relaxed" {...props} />,
+                ul: ({ ...props }) => <ul className="list-disc pl-4 mb-2 space-y-1" {...props} />,
+                ol: ({ ...props }) => <ol className="list-decimal pl-4 mb-2 space-y-1" {...props} />,
+                li: ({ ...props }) => <li className="pl-1" {...props} />,
+                blockquote: ({ ...props }) => <blockquote className="border-l-4 border-whatsapp-divider pl-3 italic my-2 text-whatsapp-ink-soft" {...props} />,
+                code: ({ inline, className, children, ...props }) => {
                     const match = /language-(\w+)/.exec(className || '');
                     return !inline ? (
                         <div className="relative group my-3 rounded-lg overflow-hidden bg-whatsapp-panel-muted border border-whatsapp-divider">
@@ -2034,13 +2012,13 @@ const MarkdownRenderer = ({ content }) => {
                         </code>
                     );
                 },
-                a: ({ node, ...props }) => <a className="text-whatsapp-accent hover:underline font-medium" target="_blank" rel="noopener noreferrer" {...props} />,
-                table: ({ node, ...props }) => <div className="overflow-x-auto my-3 rounded-lg border border-whatsapp-divider"><table className="w-full text-sm text-left" {...props} /></div>,
-                thead: ({ node, ...props }) => <thead className="bg-whatsapp-panel-muted text-whatsapp-ink font-semibold" {...props} />,
-                tbody: ({ node, ...props }) => <tbody className="divide-y divide-whatsapp-divider" {...props} />,
-                tr: ({ node, ...props }) => <tr className="hover:bg-whatsapp-surface/50 transition-colors" {...props} />,
-                th: ({ node, ...props }) => <th className="px-3 py-2" {...props} />,
-                td: ({ node, ...props }) => <td className="px-3 py-2" {...props} />,
+                a: ({ ...props }) => <a className="text-whatsapp-accent hover:underline font-medium" target="_blank" rel="noopener noreferrer" {...props} />,
+                table: ({ ...props }) => <div className="overflow-x-auto my-3 rounded-lg border border-whatsapp-divider"><table className="w-full text-sm text-left" {...props} /></div>,
+                thead: ({ ...props }) => <thead className="bg-whatsapp-panel-muted text-whatsapp-ink font-semibold" {...props} />,
+                tbody: ({ ...props }) => <tbody className="divide-y divide-whatsapp-divider" {...props} />,
+                tr: ({ ...props }) => <tr className="hover:bg-whatsapp-surface/50 transition-colors" {...props} />,
+                th: ({ ...props }) => <th className="px-3 py-2" {...props} />,
+                td: ({ ...props }) => <td className="px-3 py-2" {...props} />,
             }}
         >
             {content}

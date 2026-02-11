@@ -107,10 +107,10 @@ const ALL_MODELS = [
     "openai/gpt-4o-mini",
     "anthropic/claude-3.5-sonnet",
     "meta-llama/llama-3-8b-instruct",
-    "deepseek/deepseek-chat",
-    "qwen/qwen-2.5-7b-instruct",
-    "moonshotai/kimi-k2",
-    "x-ai/grok-4.1-fast:free"
+    "deepseek/deepseek-v3.2-speciale",
+    "qwen/qwen3-max-thinking",
+    "moonshotai/kimi-k2.5",
+    "x-ai/grok-4.1-fast"
 ];
 
 // A simple mapping for model names and avatars for the frontend
@@ -119,11 +119,26 @@ const MODEL_DETAILS = {
     "openai/gpt-4o-mini": { name: "GPT-4o mini", avatar: " O " },
     "anthropic/claude-3.5-sonnet": { name: "Claude", avatar: " A " },
     "meta-llama/llama-3-8b-instruct": { name: "Llama", avatar: " L " },
-    "deepseek/deepseek-chat": { name: "DeepSeek Chat", avatar: " D " },
-    "qwen/qwen-2.5-7b-instruct": { name: "Qwen", avatar: " Q " },
-    "moonshotai/kimi-k2": { name: "Kimi K2", avatar: " K " },
-    "x-ai/grok-4.1-fast:free": { name: "Grok", avatar: " X " }
+    "deepseek/deepseek-v3.2-speciale": { name: "DeepSeek V3.2", avatar: " D " },
+    "qwen/qwen3-max-thinking": { name: "Qwen3 Max", avatar: " Q " },
+    "moonshotai/kimi-k2.5": { name: "Kimi K2.5", avatar: " K " },
+    "x-ai/grok-4.1-fast": { name: "Grok 4.1 Fast", avatar: " X " }
 };
+
+let modelsSeeded = false;
+async function ensureRuntimeModels() {
+    if (modelsSeeded) {
+        return;
+    }
+    try {
+        if (database && database.ensureAiModels) {
+            await database.ensureAiModels();
+        }
+        modelsSeeded = true;
+    } catch (error) {
+        console.warn('Unable to seed AI models before request:', error?.message || error);
+    }
+}
 
 // --- Load prompt templates ---
 const PROMPTS_DIR = path.join(__dirname, '../prompts');
@@ -762,6 +777,8 @@ async function handleCouncilRequest(req, res) {
         return res.status(400).json({ error: 'At least 2 models are required for a council.' });
     }
 
+    await ensureRuntimeModels();
+
     const chairmanModel = Array.isArray(selectedModels) && selectedModels.length > 0
         ? selectedModels[0]
         : 'openai/gpt-4o-mini';
@@ -870,6 +887,7 @@ app.post('/api/chat', optionalAuth, async (req, res) => {
     }
 
     const userId = req.user?.id || FALLBACK_USER_ID;
+    await ensureRuntimeModels();
 
     // Determine which models to use based on new selectedModels parameter
     let modelsToUse = [];

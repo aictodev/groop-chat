@@ -41,7 +41,7 @@ Replaces an existing model with a new one, updating all references in messages a
 
 Example:
 ```bash
-node manage_models.js replace qwen/qwen-2.5-7b-instruct qwen/qwen3-8b:free
+node manage_models.js replace qwen/qwen3-max-thinking qwen/qwen3-8b:free
 ```
 
 ### Remove a Model
@@ -73,8 +73,8 @@ The script includes pre-defined configurations for popular models from:
 - **OpenAI**: GPT-4o, GPT-4o Mini, GPT-3.5 Turbo
 - **Anthropic**: Claude 3.5 Sonnet, Claude 3 Haiku
 - **Meta**: Llama 3 8B, Llama 3 70B
-- **DeepSeek**: DeepSeek Chat, DeepSeek Coder
-- **Qwen**: Various Qwen models
+- **DeepSeek**: DeepSeek V3.2, DeepSeek Coder
+- **Qwen**: Qwen3 Max Thinking and other Qwen variants
 
 ## Workflow for Model Changes
 
@@ -97,7 +97,7 @@ The script includes pre-defined configurations for popular models from:
 node manage_models.js list
 
 # Replace a problematic model
-node manage_models.js replace qwen/qwen-2.5-7b-instruct qwen/qwen3-8b:free
+node manage_models.js replace qwen/qwen3-max-thinking qwen/qwen3-8b:free
 
 # Verify the change
 node manage_models.js list
