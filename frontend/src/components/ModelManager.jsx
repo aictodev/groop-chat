@@ -25,28 +25,8 @@ import {
   useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-
-const MODEL_PROVIDER_MAP = {
-  'google/gemini-2.5-flash': 'google',
-  'openai/gpt-4o-mini': 'openai',
-  'anthropic/claude-3.5-sonnet': 'anthropic',
-  'meta-llama/llama-3-8b-instruct': 'meta',
-  'deepseek/deepseek-chat': 'deepseek',
-  'qwen/qwen-2.5-7b-instruct': 'qwen',
-  'moonshotai/kimi-k2': 'moonshot',
-  'x-ai/grok-4.1-fast:free': 'x-ai',
-};
-
-const MODELS = [
-  { id: "google/gemini-2.5-flash", name: "Gemini" },
-  { id: "openai/gpt-4o-mini", name: "GPT-4o mini" },
-  { id: "anthropic/claude-3.5-sonnet", name: "Claude" },
-  { id: "meta-llama/llama-3-8b-instruct", name: "Llama" },
-  { id: "deepseek/deepseek-chat", name: "DeepSeek Chat" },
-  { id: "qwen/qwen-2.5-7b-instruct", name: "Qwen" },
-  { id: "moonshotai/kimi-k2", name: "Kimi K2" },
-  { id: "x-ai/grok-4.1-fast:free", name: "Grok" },
-];
+import { MODELS, getProviderIdFromModel } from "../config/models";
+import { PROVIDER_LOGOS } from "../config/providerLogos";
 
 const BADGE_SIZES = {
   sm: {
@@ -171,11 +151,11 @@ const ModelManager = ({ selectedModels, setSelectedModels, disabled }) => {
 
   const getModelConfig = (modelId) => {
     const model = MODELS.find((m) => m.id === modelId);
-    const provider = MODEL_PROVIDER_MAP[modelId] || null;
+    const provider = getProviderIdFromModel(modelId);
     return {
       name: model?.name || modelId,
       provider,
-      icon: provider ? `https://models.dev/logos/${provider}.svg` : null,
+      icon: PROVIDER_LOGOS[provider] || null,
     };
   };
 

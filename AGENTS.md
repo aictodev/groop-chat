@@ -27,7 +27,7 @@
 
 - New landing/auth page lives at `frontend/src/components/Landing.jsx`; show it whenever `useAuth()` reports no session. Auth wiring depends on `VITE_BACKEND_URL` and `VITE_CONVEX_URL`.
 - Backend now scopes conversations/messages by `conversation_participants`. Always pass the authenticated user ID to `database.getConversations(...)`, `createConversationForUser(...)`, etc., otherwise requests fall back to the sample data.
-- `backend/supabase_schema.sql` seeds the model ladder with the exact IDs used in the app (Gemini 2.5 Flash, GPT-4o mini, Claude 3.5 Sonnet, Llama 3 8B Instruct, DeepSeek Chat, Qwen 2.5 7B Instruct, Moonshot Kimi K2). Keep Convex `ai_models` in sync with these IDs.
+- `backend/supabase_schema.sql` seeds the model ladder with the exact IDs used in the app (Gemini 2.5 Flash, GPT-4o mini, Claude 3.5 Sonnet, Llama 3 8B Instruct, DeepSeek V3.2, Qwen3 Max Thinking, Moonshot Kimi K2.5, Grok 4.1 Fast). Keep Convex `ai_models` in sync with these IDs.
 - When onboarding a new user programmatically, the auth middleware calls `db.ensureUserProfile` in Convex and then `database.ensureDefaultConversation` to create a starter chat.
 
 ## Notes (2025-10-12)

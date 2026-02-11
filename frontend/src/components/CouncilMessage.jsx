@@ -8,11 +8,11 @@ const MarkdownRenderer = ({ content }) => (
         remarkPlugins={[remarkGfm]}
         className="markdown-body text-sm"
         components={{
-            p: ({ node, ...props }) => <p className="mb-2 last:mb-0 leading-relaxed" {...props} />,
-            ul: ({ node, ...props }) => <ul className="list-disc pl-4 mb-2 space-y-1" {...props} />,
-            ol: ({ node, ...props }) => <ol className="list-decimal pl-4 mb-2 space-y-1" {...props} />,
-            li: ({ node, ...props }) => <li className="pl-1" {...props} />,
-            code: ({ node, inline, className, children, ...props }) => {
+            p: ({ ...props }) => <p className="mb-2 last:mb-0 leading-relaxed" {...props} />,
+            ul: ({ ...props }) => <ul className="list-disc pl-4 mb-2 space-y-1" {...props} />,
+            ol: ({ ...props }) => <ol className="list-decimal pl-4 mb-2 space-y-1" {...props} />,
+            li: ({ ...props }) => <li className="pl-1" {...props} />,
+            code: ({ inline, className, children, ...props }) => {
                 return inline ? (
                     <code className="px-1 py-0.5 rounded bg-black/5 font-mono text-[0.9em]" {...props}>{children}</code>
                 ) : (
