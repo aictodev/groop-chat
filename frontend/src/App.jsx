@@ -1211,25 +1211,43 @@ function App() {
 
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
+            let sseBuffer = '';
+
+            const processSseLine = (line) => {
+                const normalized = line.replace(/\r$/, '');
+                if (!normalized.startsWith('data: ')) {
+                    return;
+                }
+                try {
+                    const data = JSON.parse(normalized.slice(6));
+                    handleStreamEvent(data);
+                } catch {
+                    console.warn('Failed to parse SSE data:', normalized);
+                }
+            };
 
             while (true) {
                 const { done, value } = await reader.read();
                 if (done) break;
 
-                const chunk = decoder.decode(value);
-                const lines = chunk.split('\n');
+                sseBuffer += decoder.decode(value, { stream: true });
+                let newlineIndex = sseBuffer.indexOf('\n');
 
-                for (const line of lines) {
-                    if (line.startsWith('data: ')) {
-                        try {
-                            const data = JSON.parse(line.slice(6));
-                            handleStreamEvent(data);
-                        } catch {
-                            console.warn('Failed to parse SSE data:', line);
-                        }
-                    }
+                while (newlineIndex !== -1) {
+                    const line = sseBuffer.slice(0, newlineIndex);
+                    sseBuffer = sseBuffer.slice(newlineIndex + 1);
+                    processSseLine(line);
+                    newlineIndex = sseBuffer.indexOf('\n');
                 }
             }
+
+            sseBuffer += decoder.decode();
+            if (sseBuffer.length > 0) {
+                processSseLine(sseBuffer);
+            }
+
+            setIsLoading(false);
+            setTypingModel(null);
 
         } catch (error) {
             console.error("Failed to connect to backend:", error);

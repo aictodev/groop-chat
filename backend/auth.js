@@ -27,14 +27,29 @@ const createAuthedClient = (token) => {
     return client;
 };
 
+const resolveUserProfile = async (client) => {
+    let profile = null;
+    try {
+        profile = await client.query(api.db.getAuthedUserProfile, {});
+    } catch (error) {
+        console.warn('Unable to fetch authed profile via query, falling back to ensureUserProfile:', error?.message || error);
+    }
+
+    if (profile?.id) {
+        return profile;
+    }
+
+    return await client.mutation(api.db.ensureUserProfile, {});
+};
+
 const buildUser = (profile) => ({
-    id: profile.id,
+    id: profile.id || profile._id,
     email: profile.email || null,
     user_metadata: {
         full_name: profile.display_name || null,
         avatar_url: profile.avatar_url || null
     },
-    auth_user_id: profile.auth_user_id || null
+    auth_user_id: profile.auth_user_id || profile._id || null
 });
 
 const authenticateUser = async (req, res, next) => {
@@ -57,7 +72,7 @@ const authenticateUser = async (req, res, next) => {
             return res.status(500).json({ error: 'Authentication service unavailable' });
         }
 
-        const profile = await client.mutation(api.db.ensureUserProfile, {});
+        const profile = await resolveUserProfile(client);
         if (!profile) {
             return res.status(401).json({ error: 'Invalid or expired token' });
         }
@@ -86,7 +101,7 @@ const optionalAuth = async (req, res, next) => {
             if (api && convexUrl) {
                 try {
                     const client = createAuthedClient(token);
-                    const profile = await client.mutation(api.db.ensureUserProfile, {});
+                    const profile = await resolveUserProfile(client);
                     if (profile) {
                         req.user = buildUser(profile);
                         req.authToken = token;
