@@ -255,6 +255,25 @@ function App() {
         });
     }, [user]);
 
+    const handleReplyToMessage = useCallback((message) => {
+
+        // Don't allow replies to temporary IDs or invalid UUID formats (not stored in database)
+        const messageId = message.id && message.id.toString();
+        const isValidUUID = messageId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(messageId);
+        const isTempId = messageId && messageId.startsWith('temp_');
+
+        if (!isValidUUID || isTempId) {
+            setReplyToMessage(null);
+            setConversationMode('group');
+            return;
+        }
+
+        setReplyToMessage(message);
+        if (message.sender === 'ai') {
+            setConversationMode('direct');
+        }
+    }, []);
+
     // Load existing messages on component mount
     useEffect(() => {
         if (loading || !user) {
@@ -880,24 +899,6 @@ function App() {
         }
     };
 
-    const handleReplyToMessage = (message) => {
-
-        // Don't allow replies to temporary IDs or invalid UUID formats (not stored in database)
-        const messageId = message.id && message.id.toString();
-        const isValidUUID = messageId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(messageId);
-        const isTempId = messageId && messageId.startsWith('temp_');
-
-        if (!isValidUUID || isTempId) {
-            setReplyToMessage(null);
-            setConversationMode('group');
-            return;
-        }
-
-        setReplyToMessage(message);
-        if (message.sender === 'ai') {
-            setConversationMode('direct');
-        }
-    };
 
     const clearReply = () => {
         setReplyToMessage(null);
@@ -2061,7 +2062,7 @@ const ChatWindow = ({ messages, isLoading, chatEndRef }) => (
     </main>
 );
 
-    const MessageBubble = ({ msg, onReply }) => {
+    const MessageBubble = React.memo(({ msg, onReply }) => {
         const [isCopied, setIsCopied] = useState(false);
 
         const handleCopy = async () => {
@@ -2163,7 +2164,7 @@ const ChatWindow = ({ messages, isLoading, chatEndRef }) => (
             </div>
         </div>
     );
-};
+});
 
 const TypingIndicator = ({ model }) => (
     <div className="chat-message chat-message--incoming">
