@@ -61,6 +61,17 @@ export const getUserProfile = query({
   },
 });
 
+export const getAuthedUserProfile = query({
+  args: {},
+  handler: async (ctx) => {
+    const authUserId = await getAuthUserId(ctx);
+    if (authUserId === null) {
+      return null;
+    }
+    return await ctx.db.get(authUserId);
+  },
+});
+
 export const ensureUserProfile = mutation({
   args: {},
   handler: async (ctx) => {
@@ -94,8 +105,7 @@ export const ensureUserProfile = mutation({
       authUser.display_name || authUser.name || legacyUser?.display_name || username;
     const avatarUrl = authUser.avatar_url || authUser.image || legacyUser?.avatar_url || null;
     const now = new Date().toISOString();
-
-    await ctx.db.patch(authUserId, {
+    const desiredPatch = {
       id: legacyId,
       username,
       display_name: displayName,
@@ -103,7 +113,19 @@ export const ensureUserProfile = mutation({
       created_at: authUser.created_at || legacyUser?.created_at || now,
       updated_at: now,
       is_active: authUser.is_active ?? legacyUser?.is_active ?? true,
-    });
+    };
+
+    const needsPatch =
+      authUser.id !== desiredPatch.id ||
+      authUser.username !== desiredPatch.username ||
+      authUser.display_name !== desiredPatch.display_name ||
+      authUser.avatar_url !== desiredPatch.avatar_url ||
+      authUser.created_at !== desiredPatch.created_at ||
+      authUser.is_active !== desiredPatch.is_active;
+
+    if (needsPatch) {
+      await ctx.db.patch(authUserId, desiredPatch);
+    }
 
     if (legacyUser) {
       await ctx.db.delete(legacyUser._id);

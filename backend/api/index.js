@@ -552,6 +552,51 @@ Return ONLY the title, no quotes or extra text.`;
  */
 // --- LLM Council Logic (Inlined for Vercel Compatibility) ---
 
+const normalizeContentText = (content) => {
+    if (typeof content === 'string') {
+        const trimmed = content.trim();
+        return trimmed.length > 0 ? trimmed : null;
+    }
+
+    if (Array.isArray(content)) {
+        const text = content
+            .map((part) => {
+                if (typeof part === 'string') return part;
+                if (!part || typeof part !== 'object') return '';
+                if (typeof part.text === 'string') return part.text;
+                if (part.text && typeof part.text === 'object' && typeof part.text.value === 'string') {
+                    return part.text.value;
+                }
+                if (part.type === 'text' && typeof part.value === 'string') return part.value;
+                return '';
+            })
+            .join('')
+            .trim();
+        return text.length > 0 ? text : null;
+    }
+
+    if (content && typeof content === 'object') {
+        if (typeof content.text === 'string') {
+            const trimmed = content.text.trim();
+            return trimmed.length > 0 ? trimmed : null;
+        }
+        if (content.text && typeof content.text.value === 'string') {
+            const trimmed = content.text.value.trim();
+            return trimmed.length > 0 ? trimmed : null;
+        }
+    }
+
+    return null;
+};
+
+const extractOpenRouterText = (responseData) => {
+    const choice = responseData?.choices?.[0];
+    if (!choice) return null;
+
+    const content = choice?.message?.content ?? choice?.text ?? null;
+    return normalizeContentText(content);
+};
+
 // Helper: Call OpenRouter (Replicated for isolation)
 async function callOpenRouterForCouncil(model, prompt, history = [], maxLength = 2000, systemPrompt = '') {
     try {
@@ -578,7 +623,12 @@ async function callOpenRouterForCouncil(model, prompt, history = [], maxLength =
         }
 
         const response = await axios.post(API_URL, payload, { headers });
-        return response.data.choices[0].message.content.trim();
+        const text = extractOpenRouterText(response.data);
+        if (!text) {
+            console.warn(`Model ${model} returned an empty council response`);
+            return null;
+        }
+        return text;
     } catch (error) {
         console.error(`Error calling model ${model}:`, error.message);
         return null;
@@ -1000,13 +1050,19 @@ app.post('/api/chat', optionalAuth, async (req, res) => {
                     });
 
                     const response = await callOpenRouter(targetModel, prompt, [], null, systemPrompt);
-                    await database.createAIMessage(response, targetModel, false, targetConversationId, aiReplyTargetId, 'direct', userId);
+                    if (response) {
+                        try {
+                            await database.createAIMessage(response, targetModel, false, targetConversationId, aiReplyTargetId, 'direct', userId);
+                        } catch (persistError) {
+                            console.warn('Failed to persist direct AI message:', persistError?.message || persistError);
+                        }
+                    }
 
                     res.write(`data: ${JSON.stringify({
                         type: 'message',
                         model: modelDetails.name,
                         avatar: modelDetails.avatar,
-                        text: response,
+                        text: response || `No response from ${modelDetails.name}.`,
                         isDirectReply: true
                     })}\n\n`);
 
@@ -1059,16 +1115,24 @@ app.post('/api/chat', optionalAuth, async (req, res) => {
 
             // First model response
             const firstResponderResponse = await callOpenRouter(firstModel, prompt, [], maxChars, systemPrompt);
-            await database.createAIMessage(firstResponderResponse, firstModel, true, targetConversationId, aiReplyTargetId, 'group', userId);
+            if (firstResponderResponse) {
+                try {
+                    await database.createAIMessage(firstResponderResponse, firstModel, true, targetConversationId, aiReplyTargetId, 'group', userId);
+                } catch (persistError) {
+                    console.warn('Failed to persist first model response:', persistError?.message || persistError);
+                }
+            }
 
             res.write(`data: ${JSON.stringify({
                 type: 'message',
                 model: firstModelDetails.name,
                 avatar: firstModelDetails.avatar,
-                text: firstResponderResponse
+                text: firstResponderResponse || `No response from ${firstModelDetails.name}.`
             })}\n\n`);
 
-            chatHistory.push({ role: 'assistant', content: firstResponderResponse });
+            if (firstResponderResponse) {
+                chatHistory.push({ role: 'assistant', content: firstResponderResponse });
+            }
 
             // Remaining models: sequential responses with enhanced context
             const remainingModels = modelsToUse.slice(1);
@@ -1095,16 +1159,24 @@ app.post('/api/chat', optionalAuth, async (req, res) => {
                 });
 
                 const newResponse = await callOpenRouter(model, uniquenessPrompt, chatHistory, maxChars, systemPrompt);
-                await database.createAIMessage(newResponse, model, false, targetConversationId, aiReplyTargetId, 'group', userId);
+                if (newResponse) {
+                    try {
+                        await database.createAIMessage(newResponse, model, false, targetConversationId, aiReplyTargetId, 'group', userId);
+                    } catch (persistError) {
+                        console.warn(`Failed to persist response for model ${model}:`, persistError?.message || persistError);
+                    }
+                }
 
                 res.write(`data: ${JSON.stringify({
                     type: 'message',
                     model: modelDetails.name,
                     avatar: modelDetails.avatar,
-                    text: newResponse
+                    text: newResponse || `No response from ${modelDetails.name}.`
                 })}\n\n`);
 
-                chatHistory.push({ role: 'assistant', content: newResponse });
+                if (newResponse) {
+                    chatHistory.push({ role: 'assistant', content: newResponse });
+                }
             }
         }
 
@@ -1165,16 +1237,19 @@ async function callOpenRouter(model, prompt, history = [], maxLength = 280, syst
         }
 
         const response = await axios.post(API_URL, payload, { headers });
-
-        return response.data.choices[0].message.content.trim();
+        const text = extractOpenRouterText(response.data);
+        if (!text) {
+            console.warn(`Model ${model} returned an empty response`);
+            return null;
+        }
+        return text;
     } catch (error) {
         if (error.response) {
             console.error(`Error calling model ${model}: status=${error.response.status}`, error.response.data);
         } else {
             console.error(`Error calling model ${model}:`, error.message);
         }
-        // Return a graceful error message instead of throwing
-        return `Error: Could not get a response from ${model}.`;
+        return null;
     }
 }
 
